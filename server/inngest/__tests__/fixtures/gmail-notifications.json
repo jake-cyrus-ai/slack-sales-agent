@@ -1,0 +1,26 @@
+{
+  "basic_notification": {
+    "message": {
+      "data": "eyJlbWFpbEFkZHJlc3MiOiJ1c2VyQG15Y29tcGFueS5jb20iLCJoaXN0b3J5SWQiOiIxMjM0NTYifQ==",
+      "messageId": "msg-test-123",
+      "message_id": "msg-test-123",
+      "publishTime": "2024-02-03T10:30:00Z",
+      "publish_time": "2024-02-03T10:30:00Z"
+    },
+    "subscription": "projects/test-project/subscriptions/gmail-push"
+  },
+  "decoded_notification": {
+    "emailAddress": "user@mycompany.com",
+    "historyId": "123456"
+  },
+  "notification_with_labels": {
+    "message": {
+      "data": "eyJlbWFpbEFkZHJlc3MiOiJ1c2VyQG15Y29tcGFueS5jb20iLCJoaXN0b3J5SWQiOiIxMjM0NTYiLCJsYWJlbHMiOlsiSU5CT1giLCJVTlJFQUQiXX0=",
+      "messageId": "msg-test-456",
+      "message_id": "msg-test-456",
+      "publishTime": "2024-02-03T10:30:00Z",
+      "publish_time": "2024-02-03T10:30:00Z"
+    },
+    "subscription": "projects/test-project/subscriptions/gmail-push"
+  }
+}

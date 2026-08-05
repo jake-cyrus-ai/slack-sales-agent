@@ -1,0 +1,62 @@
+{
+  "_comment": "Example Slack app manifest for the Slack-Native Sales Agent Harness. Replace all placeholder URLs with your actual deployment URL before installing. See README.md for setup instructions.",
+  "display_information": {
+    "name": "Sales Agent",
+    "description": "AI sales assistant — meeting prep, email drafts, CRM updates, and follow-ups via Slack",
+    "background_color": "#000000"
+  },
+  "features": {
+    "app_home": {
+      "home_tab_enabled": false,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
+    "bot_user": {
+      "display_name": "Sales Agent",
+      "always_online": true
+    }
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://your-backend.example.com/api/oauth/slack/callback"
+    ],
+    "scopes": {
+      "user": [
+        "identity.basic",
+        "identity.email"
+      ],
+      "bot": [
+        "app_mentions:read",
+        "chat:write",
+        "files:write",
+        "im:history",
+        "im:read",
+        "im:write",
+        "users:read",
+        "users:read.email",
+        "channels:history",
+        "groups:history",
+        "mpim:history"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://your-backend.example.com/api/webhooks/slack/events",
+      "bot_events": [
+        "app_mention",
+        "message.im",
+        "message.channels",
+        "message.groups",
+        "message.mpim"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://your-backend.example.com/api/webhooks/slack/interactivity"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

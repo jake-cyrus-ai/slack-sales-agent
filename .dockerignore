@@ -1,0 +1,47 @@
+# Dependencies and build artifacts
+node_modules
+dist
+server/dist
+.pnpm-store
+
+# Env and secrets (never in image)
+.env
+.env.*
+!.env.example
+
+# Git and IDE
+.git
+.gitignore
+.cursor
+.claude
+*.md
+!server/**/*.md
+
+# Frontend (served from S3/CloudFront)
+src
+public
+index.html
+vite.config.ts
+postcss.config.js
+*.css
+
+# Tests and tooling
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+coverage
+.vitest
+vitest.config.ts
+eslint.config.js
+scripts
+
+# Supabase and docs
+supabase
+docs
+assets
+
+# Misc
+*.log
+.DS_Store
+pnpm-debug.log*

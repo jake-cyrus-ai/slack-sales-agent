@@ -1,0 +1,166 @@
+{
+  "approve_email_draft": {
+    "type": "block_actions",
+    "user": {
+      "id": "U12345TEST",
+      "username": "testuser",
+      "name": "Test User"
+    },
+    "team": {
+      "id": "T12345TEST",
+      "domain": "testworkspace"
+    },
+    "channel": {
+      "id": "C12345TEST",
+      "name": "general"
+    },
+    "message": {
+      "ts": "1234567890.123456"
+    },
+    "actions": [
+      {
+        "type": "button",
+        "action_id": "approve_email",
+        "block_id": "approval_block",
+        "text": {
+          "type": "plain_text",
+          "text": "Approve"
+        },
+        "value": "draft-test-123",
+        "action_ts": "1234567890.123456"
+      }
+    ],
+    "response_url": "https://hooks.slack.com/actions/TEST/TEST/TEST",
+    "trigger_id": "123.456.test"
+  },
+  "reject_email_draft": {
+    "type": "block_actions",
+    "user": {
+      "id": "U12345TEST",
+      "username": "testuser",
+      "name": "Test User"
+    },
+    "team": {
+      "id": "T12345TEST",
+      "domain": "testworkspace"
+    },
+    "channel": {
+      "id": "C12345TEST",
+      "name": "general"
+    },
+    "message": {
+      "ts": "1234567890.123456"
+    },
+    "actions": [
+      {
+        "type": "button",
+        "action_id": "reject_email",
+        "block_id": "approval_block",
+        "text": {
+          "type": "plain_text",
+          "text": "Reject"
+        },
+        "value": "draft-test-123",
+        "action_ts": "1234567890.123456"
+      }
+    ],
+    "response_url": "https://hooks.slack.com/actions/TEST/TEST/TEST",
+    "trigger_id": "123.456.test"
+  },
+  "edit_email_draft": {
+    "type": "block_actions",
+    "user": {
+      "id": "U12345TEST",
+      "username": "testuser",
+      "name": "Test User"
+    },
+    "team": {
+      "id": "T12345TEST",
+      "domain": "testworkspace"
+    },
+    "channel": {
+      "id": "C12345TEST",
+      "name": "general"
+    },
+    "message": {
+      "ts": "1234567890.123456"
+    },
+    "actions": [
+      {
+        "type": "button",
+        "action_id": "edit_email",
+        "block_id": "approval_block",
+        "text": {
+          "type": "plain_text",
+          "text": "Edit"
+        },
+        "value": "draft-test-123",
+        "action_ts": "1234567890.123456"
+      }
+    ],
+    "response_url": "https://hooks.slack.com/actions/TEST/TEST/TEST",
+    "trigger_id": "123.456.test"
+  },
+  "meeting_prep_skip_attendee": {
+    "type": "block_actions",
+    "user": {
+      "id": "U12345TEST",
+      "username": "testuser",
+      "name": "Test User"
+    },
+    "team": {
+      "id": "T12345TEST",
+      "domain": "testworkspace"
+    },
+    "channel": {
+      "id": "C12345TEST",
+      "name": "general"
+    },
+    "message": {
+      "ts": "1234567890.123456"
+    },
+    "actions": [
+      {
+        "type": "button",
+        "action_id": "skip_attendee",
+        "block_id": "meeting_prep_block",
+        "text": {
+          "type": "plain_text",
+          "text": "Skip this attendee"
+        },
+        "value": "event-test-123:john@example.com",
+        "action_ts": "1234567890.123456"
+      }
+    ],
+    "response_url": "https://hooks.slack.com/actions/TEST/TEST/TEST",
+    "trigger_id": "123.456.test"
+  },
+  "modal_submission": {
+    "type": "view_submission",
+    "user": {
+      "id": "U12345TEST",
+      "username": "testuser",
+      "name": "Test User"
+    },
+    "team": {
+      "id": "T12345TEST",
+      "domain": "testworkspace"
+    },
+    "view": {
+      "type": "modal",
+      "callback_id": "edit_email_modal",
+      "state": {
+        "values": {
+          "email_content_block": {
+            "email_content_input": {
+              "type": "plain_text_input",
+              "value": "Updated email content here..."
+            }
+          }
+        }
+      }
+    },
+    "response_urls": [],
+    "trigger_id": "123.456.test"
+  }
+}

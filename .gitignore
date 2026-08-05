@@ -1,0 +1,76 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development
+
+# MCP config (contains API tokens)
+.mcp.json
+.claude/mcp.json
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/*
+.pnpm-store
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+server/dist/
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.cursor
+
+
+# Backup files
+*.save
+*.bak
+*.tmp
+
+# Temporary Supabase files
+supabase/.temp/
+supabase/.branches/
+
+# Drift investigation raw dumps — review-only, never committed
+tasks/drift-investigation/*.sql
+
+# Test coverage
+coverage/
+*.snap
+
+# Generated reports
+report.*.json
+
+.env*
+!.env.example
+
+# Terraform (state and tfvars may contain secrets; .terraform.lock.hcl should be committed)
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/*.tfvars
+infra/**/*.tfplan
+
+tsconfig.*.tsbuildinfo
+.claude/scheduled_tasks.lock
+
+# Local-only secrets for Claude Code agent tooling
+.claude-test-credentials
+supabase-pat
+.vercel

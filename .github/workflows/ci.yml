@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Frontend typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: Server typecheck
+        run: pnpm run build:server:check
+
+      - name: Run Inngest tests
+        run: pnpm exec vitest run --config server/inngest/__tests__/vitest.config.ts --dir server/inngest/__tests__
+
+      - name: Run provider tool tests
+        run: pnpm run test:tools
+
+      - name: Run frontend tests
+        run: pnpm exec vitest run --config vitest.config.ts
+
+      - name: Build frontend
+        run: pnpm run build
+
+      - name: Build server
+        run: pnpm run build:server
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

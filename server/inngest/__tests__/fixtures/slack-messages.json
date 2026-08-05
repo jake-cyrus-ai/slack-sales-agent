@@ -1,0 +1,56 @@
+{
+  "basic_message": {
+    "type": "message",
+    "user": "U12345TEST",
+    "text": "Hey Sales Agent, can you help me with something?",
+    "channel": "C12345TEST",
+    "ts": "1234567890.123456",
+    "team": "T12345TEST",
+    "event_ts": "1234567890.123456"
+  },
+  "meeting_prep_request": {
+    "type": "message",
+    "user": "U12345TEST",
+    "text": "/prep meeting with john@acmecorp.com tomorrow at 2pm",
+    "channel": "C12345TEST",
+    "ts": "1234567890.123456",
+    "team": "T12345TEST",
+    "event_ts": "1234567890.123456"
+  },
+  "document_search_request": {
+    "type": "message",
+    "user": "U12345TEST",
+    "text": "/docs pricing information",
+    "channel": "C12345TEST",
+    "ts": "1234567890.123456",
+    "team": "T12345TEST",
+    "event_ts": "1234567890.123456"
+  },
+  "general_chat": {
+    "type": "message",
+    "user": "U12345TEST",
+    "text": "What's the status of the ACME Corp deal?",
+    "channel": "C12345TEST",
+    "ts": "1234567890.123456",
+    "team": "T12345TEST",
+    "event_ts": "1234567890.123456"
+  },
+  "email_draft_request": {
+    "type": "message",
+    "user": "U12345TEST",
+    "text": "Draft an email to prospect@example.com about our pricing",
+    "channel": "C12345TEST",
+    "ts": "1234567890.123456",
+    "team": "T12345TEST",
+    "event_ts": "1234567890.123456"
+  },
+  "app_mention": {
+    "type": "app_mention",
+    "user": "U12345TEST",
+    "text": "<@U0BOTID> Can you prepare me for the call with Jane Smith?",
+    "channel": "C12345TEST",
+    "ts": "1234567890.123456",
+    "team": "T12345TEST",
+    "event_ts": "1234567890.123456"
+  }
+}
