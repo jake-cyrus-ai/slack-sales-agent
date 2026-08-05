@@ -1,109 +1,87 @@
 # Slack Sales Agent
 
-A Slack-native, open-source sales agent platform that connects to email, calendars, meeting notes, and CRMs. It prepares meetings, drafts and sends approved emails, executes approved CRM operations, learns user preferences, and can run explicitly configured autonomous email workflows.
+A Slack-native, open-source sales agent platform that connects to email, calendars, meeting notes, and CRMs. It prepares meetings, drafts emails, executes approved CRM operations, and learns user preferences over time.
 
-## Architecture
+## What ships
+
+- Slack installation, signed Events API ingestion, DMs, mentions, threads, and interactive approvals
+- durable Inngest workflows with retries, concurrency controls, delayed work, and failure reporting
+- a LangGraph supervisor that composes sales skills
+- Gmail and Google Calendar OAuth, search, drafting, sending, and meeting preparation
+- direct Attio and Granola hosted-MCP connections using OAuth discovery and PKCE
+- Salesforce accounts, contacts, opportunities, tasks, notes, and approval-gated writes
+- explicit and inferred preferences, corrections, feedback provenance, and tenant isolation
+- optional autonomous inbound-email qualification and response policies
+- a small Clerk-authenticated configuration UI; Slack remains the primary product surface
 
 ```text
-Slack
-  → signed event and interaction ingestion
-  → workspace and user resolution
-  → Inngest durable workflows
-  → LangGraph supervisor and composed sales skills
-  → Gmail / Google Calendar / Granola / Salesforce / Attio
-  → approval policy or configured autonomous-email policy
-  → Slack response or provider action
-  → preferences, feedback, learning, and audit events
+Slack → verified event → tenant resolution → Inngest → supervisor
+      → sales skills → approval/autonomous policy → provider action
+      → audit, feedback, and preference learning
 ```
 
-The repository contains two layers:
+## Quick start
 
-- `server/src/agent`, `server/src/skills`, and the Slack/Inngest runtime provide the reusable agent harness.
-- The sales skill pack provides email, calendar, transcript, meeting-prep, Salesforce, Attio, preference, and feedback workflows.
-
-## Retained capabilities
-
-- Slack installation, signed events, DMs, mentions, threads, and interactive approvals
-- Durable Inngest workflows with retries and failure reporting
-- LangGraph supervisor and composable skill manifests
-- Gmail and Google Calendar OAuth and operations
-- Direct, user-scoped Granola and Attio hosted-MCP integrations
-- Salesforce OAuth and CRM tools
-- Cross-source meeting preparation
-- Email drafting, editing, approval, rejection, and sending
-- CRM reads and approval-gated writes
-- Explicit and inferred preferences with feedback provenance
-- Multi-user and multi-organization isolation through Clerk, Supabase, and RLS
-- Optional autonomous inbound-email qualification and response workflows
-
-## Autonomous email policy
-
-Autonomous email is disabled unless an organization explicitly configures it. The workflow classifies inbound messages, gathers account and prospect context, drafts a response, applies configured risk rules, and records its outcome. Deployers should default consequential or ambiguous messages to Slack approval and use the autonomous path only for narrowly defined categories.
-
-The implementation lives in `server/inngest/functions/agents/autonomous-email-agent.ts`. Supporting context helpers live under `server/lib/prospect-context`; they are backend workflow infrastructure, not a prospect-facing chat product.
-
-## Integrations
-
-| Integration | Connection model | Primary use |
-| --- | --- | --- |
-| Slack | Workspace OAuth | Agent interface and approvals |
-| Gmail | User OAuth | Search, drafts, sends, inbound notifications |
-| Google Calendar | User OAuth | Events and meeting preparation |
-| Granola | Provider-hosted MCP + OAuth 2.1/PKCE | Meeting notes and transcripts |
-| Salesforce | Connected App OAuth | Accounts, contacts, opportunities, and tasks |
-| Attio | Provider-hosted MCP + OAuth 2.1/PKCE | People, companies, deals, notes, and tasks |
-
-Provider credentials are tenant-scoped and encrypted at rest. Tokens must never enter prompts, Slack messages, browser responses, or logs.
-
-Attio and Granola use provider-hosted OAuth discovery and dynamic client registration, so deployers do not configure a separate Attio or Granola client ID. Their callback URLs still require a publicly reachable `SERVER_BASE_URL`. Google and Salesforce use deployer-owned OAuth applications.
-
-## Local development
-
-Requirements:
-
-- Node.js 22+
-- pnpm 9+
-- Supabase/Postgres
-- Clerk
-- Inngest Cloud or the local Inngest development server
-- Anthropic API access
+Requirements: Node.js 22+, pnpm 10+, a Supabase project, Clerk, Inngest, Slack, Anthropic, and OpenAI.
 
 ```bash
 git clone https://github.com/jake-cyrus-ai/slack-sales-agent.git
 cd slack-sales-agent
+corepack enable
 pnpm install --frozen-lockfile
 cp .env.example .env
-pnpm run dev:all
 ```
 
-The configuration UI runs on `http://localhost:5173`, the Express API on `http://localhost:3001`, and the local Inngest UI on `http://localhost:8288`.
+Create and migrate Supabase:
 
-Create a Slack app from `examples/slack-app-manifest.example.json`. Configure exact HTTPS callback URLs from `.env.example`; never use wildcard redirects.
+```bash
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
+supabase db push
+pnpm setup:supabase
+```
+
+Validate configuration and run locally:
+
+```bash
+pnpm check:env
+pnpm dev:all
+```
+
+The UI runs at `http://localhost:5173`, the API at `http://localhost:3001`, and local Inngest at `http://localhost:8288`.
+
+For a production bring-your-own-keys walkthrough, callback URL table, Clerk setup, Docker instructions, and smoke test, see [Deployment](docs/DEPLOYMENT.md). Provider-specific details are in [Google OAuth](docs/guides/GOOGLE-OAUTH.md) and [Salesforce OAuth](docs/guides/SALESFORCE-ONBOARDING.md).
+
+## Integration ownership
+
+| Integration | Connection model |
+| --- | --- |
+| Slack | deployer-owned Slack app |
+| Gmail and Calendar | deployer-owned Google OAuth app |
+| Salesforce | deployer-owned Connected App |
+| Attio | direct provider-hosted MCP OAuth |
+| Granola | direct provider-hosted MCP OAuth |
+
+Provider tokens are encrypted before persistence and are never included in model prompts, Slack responses, browser payloads, or structured logs. Email sends require approval by default. Autonomous email must be enabled explicitly at the organization level. CRM mutations remain approval-first.
 
 ## Validation
 
 ```bash
-pnpm run lint
-pnpm run build
-pnpm run build:server
-pnpm run build:server:check
-pnpm run test:run
-pnpm run test:inngest
+pnpm lint
+pnpm exec tsc --noEmit
+pnpm build:server:check
+pnpm test:run
+pnpm test:inngest
+pnpm test:tools
+pnpm build
+pnpm build:server
+pnpm audit --audit-level high
 ```
 
-Tests mock providers and must not require production credentials.
+Tests use mocked providers and do not require live credentials. GitHub Actions runs type checks, tests, builds, dependency checks, and secret scanning.
 
-## Production checklist
+## Status
 
-- Replace all example origins and identifiers.
-- Configure a production Supabase project and apply the sanitized baseline migration.
-- Configure Clerk, Inngest, Slack, Google, Salesforce, Attio, and Granola applications.
-- Store encryption keys and service credentials in a managed secret store.
-- Review autonomous-email categories, approval requirements, timeouts, and kill switches.
-- Verify tenant isolation and deletion procedures.
-- Configure logs, traces, alerts, and dead-letter handling.
-- Run tests, builds, dependency audit, and secret scanning before deployment.
+This repository is intended to be deployed by operators who bring their own provider accounts and keys. It does not include hosted OAuth credentials, customer data, production infrastructure, or a managed control plane.
 
-## License and security
-
-Licensed under MIT. See `SECURITY.md` for vulnerability reporting and security boundaries.
+MIT licensed. See [Security](SECURITY.md) and [Contributing](CONTRIBUTING.md).

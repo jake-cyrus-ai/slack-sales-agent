@@ -1,15 +1,10 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-
-import App from "./App";
+import { integrationNames } from "./integrations";
 
 describe("configuration surface", () => {
   it("presents the Slack sales agent and retained integrations", () => {
-    const html = renderToStaticMarkup(<App />);
-
-    expect(html).toContain("Slack-native sales agent");
-    expect(html).toContain("Attio");
-    expect(html).toContain("Granola");
-    expect(html.toLowerCase()).toContain("autonomous email");
+    expect(integrationNames).toContain("Slack");
+    expect(integrationNames).toContain("Attio");
+    expect(integrationNames).toContain("Granola");
   });
 });

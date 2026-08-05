@@ -18,7 +18,7 @@ import { orgValidationMiddleware } from "./middleware/org-validation.js";
  * (e.g. dev when using the local dev server).
  */
 export const inngest = new Inngest({
-  id: "agent-ai",
+  id: "slack-sales-agent",
   schemas: new EventSchemas().fromRecord<Events>(),
   // Force cloud mode only in production; local dev server always uses dev mode
   isDev: process.env.NODE_ENV !== 'production',

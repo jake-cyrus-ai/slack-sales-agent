@@ -1,4 +1,6 @@
 -- =============================================================================
+
+SET check_function_bodies = off;
 -- Baseline schema for the Slack-Native Sales Agent Harness
 --
 -- This is a single sanitized migration containing the complete schema required
@@ -25,6 +27,16 @@
 
 CREATE EXTENSION IF NOT EXISTS "vector";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA extensions;
+
+-- A deployer provisions this singleton through `pnpm setup:supabase`. Keeping
+-- the credential-encryption key out of migrations allows every installation to
+-- bring its own key. RLS is enabled below and no client-facing policy is added.
+CREATE TABLE IF NOT EXISTS public.app_secrets (
+  name        text        PRIMARY KEY,
+  value       text        NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
 
 -- =============================================================================
 -- Enums
@@ -101,12 +113,24 @@ $$;
 -- Token encryption functions
 -- =============================================================================
 
--- Internal key accessor — key is derived from SUPABASE_JWT_SECRET at startup
+-- Internal key accessor. Only SECURITY DEFINER token functions may read this
+-- value; browser and user-scoped clients have no table policy.
 CREATE OR REPLACE FUNCTION public._get_encryption_key() RETURNS text
 LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions
 AS $$
+DECLARE
+  encryption_key text;
 BEGIN
-  RETURN current_setting('app.encryption_key', true);
+  SELECT value INTO encryption_key
+  FROM public.app_secrets
+  WHERE name = 'credential_encryption_key';
+
+  IF encryption_key IS NULL OR length(encryption_key) < 32 THEN
+    RAISE EXCEPTION 'Credential encryption key is not provisioned. Run pnpm setup:supabase.';
+  END IF;
+
+  RETURN encryption_key;
 END;
 $$;
 
@@ -152,8 +176,8 @@ DECLARE
   key text := public._get_encryption_key();
 BEGIN
   RETURN json_build_object(
-    'access_token',  extensions.pgp_sym_decrypt(decode(encrypted_access,  key), key),
-    'refresh_token', extensions.pgp_sym_decrypt(decode(encrypted_refresh, key), key)
+    'access_token',  extensions.pgp_sym_decrypt(decode(encrypted_access,  'base64'), key),
+    'refresh_token', extensions.pgp_sym_decrypt(decode(encrypted_refresh, 'base64'), key)
   );
 END;
 $$;
@@ -173,6 +197,23 @@ BEGIN
   RETURN extensions.pgp_sym_decrypt(decode(encrypted_token, 'base64'), encryption_key);
 END;
 $$;
+
+-- Credential helpers are backend-only. Supabase functions are executable by
+-- PUBLIC unless explicitly restricted, so fail closed here.
+REVOKE ALL ON FUNCTION public._get_encryption_key() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.encrypt_token(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.encrypt_token(text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.decrypt_token(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.decrypt_token(text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.encrypt_slack_token(text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.decrypt_slack_token(text, text) FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION public.encrypt_token(text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.encrypt_token(text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.decrypt_token(text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.decrypt_token(text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.encrypt_slack_token(text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.decrypt_slack_token(text, text) TO service_role;
 
 -- =============================================================================
 -- Core tables
@@ -403,6 +444,35 @@ CREATE TABLE IF NOT EXISTS public.pending_actions (
   created_at      timestamptz NOT NULL DEFAULT now(),
   resolved_at     timestamptz,
   resolved_by     text
+);
+
+CREATE TABLE IF NOT EXISTS public.audit_events (
+  id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid        REFERENCES public.organizations(id) ON DELETE CASCADE,
+  actor_user_id   text,
+  event_type      text        NOT NULL,
+  target_type     text,
+  target_id       text,
+  run_id          text,
+  outcome         text,
+  metadata        jsonb       NOT NULL DEFAULT '{}',
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_events_org_created
+  ON public.audit_events (organization_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.idempotency_keys (
+  id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid        REFERENCES public.organizations(id) ON DELETE CASCADE,
+  key             text        NOT NULL,
+  operation       text        NOT NULL,
+  status          text        NOT NULL DEFAULT 'started' CHECK (status IN ('started', 'completed', 'failed')),
+  result          jsonb,
+  expires_at      timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (organization_id, key, operation)
 );
 
 CREATE TABLE IF NOT EXISTS public.reminders (
@@ -1644,6 +1714,9 @@ ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversation_feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pending_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.idempotency_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calendar_credentials ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
@@ -1655,6 +1728,7 @@ ALTER TABLE public.slack_user_mappings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.slack_thread_conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.organization_slack_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.oauth_states ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_secrets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.oauth_connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.gmail_poll_state ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.gmail_watch_subscriptions ENABLE ROW LEVEL SECURITY;
@@ -2478,5 +2552,32 @@ DECLARE caller_role text; BEGIN
   WHERE id = p_document_id AND organization_id = p_org_id AND category = 'onboarding';
 END;
 $$;
+
+-- Supabase API roles require explicit object privileges in addition to RLS.
+-- RLS policies above remain the tenant boundary; service_role bypasses them for
+-- trusted jobs and installation/bootstrap operations.
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
+
+-- The encryption key and raw crypto helpers are backend-only. Provider tokens
+-- must never be available to browser clients, even if another policy regresses.
+REVOKE ALL ON TABLE public.app_secrets FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE public.app_secrets TO service_role;
+REVOKE ALL ON FUNCTION public._get_encryption_key() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.encrypt_token(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.decrypt_token(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.encrypt_token(text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.decrypt_token(text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public._get_encryption_key() TO service_role;
+GRANT EXECUTE ON FUNCTION public.encrypt_token(text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.decrypt_token(text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.encrypt_token(text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.decrypt_token(text, text) TO service_role;
 
 NOTIFY pgrst, 'reload schema';

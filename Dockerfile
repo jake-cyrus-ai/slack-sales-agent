@@ -1,27 +1,29 @@
-# Rogue-GPT backend (Node + Express + Inngest). Staging runs in us-east-1.
-# Frontend is served from S3/CloudFront; this image is backend only.
-FROM node:22-alpine
+FROM node:22-alpine AS build
 
-# Enable pnpm via corepack. Pinned: `latest` jumped to pnpm 11, which makes
-# ERR_PNPM_IGNORED_BUILDS fatal under --frozen-lockfile and breaks the build.
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
-
 WORKDIR /app
 
-# Install dependencies (use frozen lockfile for reproducible builds)
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
-# Copy source and build the server bundle
+COPY index.html vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./
+COPY src ./src
 COPY server ./server
-COPY tsconfig.json tsconfig.app.json tsconfig.node.json ./
-RUN pnpm run build:server
 
-# start.mjs is already in server/ from COPY server above
+RUN pnpm run build && pnpm run build:server
+RUN pnpm prune --prod
 
-# App Runner expects PORT from env; server defaults to 3001
+FROM node:22-alpine AS runtime
+ENV NODE_ENV=production
 ENV PORT=3001
-EXPOSE 3001
+WORKDIR /app
 
-# Load secret if ROGUE_GPT_SECRET_NAME is set (e.g. in App Runner), then start server
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/server/dist ./server/dist
+COPY --from=build /app/server/start.mjs ./server/start.mjs
+
+USER node
+EXPOSE 3001
 CMD ["node", "server/start.mjs"]

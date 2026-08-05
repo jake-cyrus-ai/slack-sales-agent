@@ -10,6 +10,21 @@ env:
   NODE_VERSION: "22"
 
 jobs:
+  database:
+    name: Fresh Supabase migration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start local Supabase and apply migrations
+        run: supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector
+      - name: Reset from the committed baseline
+        run: supabase db reset
+      - name: Lint database functions
+        run: supabase db lint --local --level error --fail-on error
+
   validate:
     name: Validate
     runs-on: ubuntu-latest
@@ -19,7 +34,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - uses: actions/setup-node@v4
         with:

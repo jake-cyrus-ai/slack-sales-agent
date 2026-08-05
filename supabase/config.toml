@@ -1,6 +1,1 @@
 project_id = "your-project-ref"
-
-[db.migrations]
-schema_paths = [
-  "./schemas/*.sql",
-]

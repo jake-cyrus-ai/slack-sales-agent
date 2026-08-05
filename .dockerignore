@@ -17,14 +17,6 @@ server/dist
 *.md
 !server/**/*.md
 
-# Frontend (served from S3/CloudFront)
-src
-public
-index.html
-vite.config.ts
-postcss.config.js
-*.css
-
 # Tests and tooling
 **/__tests__
 **/*.test.ts
@@ -36,7 +28,7 @@ vitest.config.ts
 eslint.config.js
 scripts
 
-# Supabase and docs
+# Supabase and docs (not required at runtime)
 supabase
 docs
 assets

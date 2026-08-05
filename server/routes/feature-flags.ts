@@ -14,7 +14,7 @@
 import { Router, Response } from "express";
 import { getAuth, requireAuth } from "@clerk/express";
 import { z } from "zod";
-import { isOrgAdmin, isMasterAdmin } from "../lib/auth";
+import { isOrgAdmin } from "../lib/auth";
 import { getSupabaseForRequest, getSupabaseAdmin } from "../lib/supabase";
 import { resolveOrgId } from "../lib/org";
 import { validateBody } from "../lib/validate";
@@ -39,8 +39,7 @@ const orgFlagSchema = z.object({
 /**
  * Authorize the caller to act on the internal `orgId`. Returns `null` on
  * success, or an `{ status, error }` rejection. Mirrors the same-named
- * helper in routes/admin.ts: master admins pass for any org; otherwise the
- * caller's active Clerk org must resolve to `orgId` AND carry org-admin role.
+ * The caller's active Clerk org must resolve to `orgId` and carry org-admin role.
  */
 type AuthzRejection = { status: number; error: string };
 
@@ -48,9 +47,8 @@ const authorizeOrgAction = async (
   req: Request,
   orgId: string
 ): Promise<AuthzRejection | null> => {
-  const { userId, orgRole, orgId: clerkOrgId, orgSlug } = getAuth(req);
+  const { userId, orgRole, orgId: clerkOrgId } = getAuth(req);
   if (!userId) return { status: 401, error: "Unauthorized" };
-  if (isMasterAdmin(orgSlug)) return null;
   if (!isOrgAdmin(orgRole)) return { status: 403, error: "Forbidden: org admin required" };
   if (!clerkOrgId) return { status: 403, error: "Organization context required" };
 
@@ -122,7 +120,7 @@ router.put(
  * Sets a feature flag on an organization.
  * Body: { orgId: string, flagKey: string, flagValue: <json> }
  *
- * Caller must be a master admin or an org admin of `orgId`.
+ * Caller must be an org admin of `orgId`.
  */
 router.put(
   "/feature-flags/org",

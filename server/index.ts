@@ -19,6 +19,8 @@ import type { Request } from "./types";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import pinoHttp from "pino-http";
 import { serve } from "inngest/express";
 import { inngest } from "../server/inngest/client";
@@ -238,6 +240,14 @@ app.get("/health", (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     requestId: req.id,
+  });
+});
+
+// Runtime browser configuration. Only values explicitly intended for public
+// clients belong here; this keeps one Docker image portable across deployments.
+app.get("/api/config", (_req: Request, res: Response) => {
+  res.json({
+    clerkPublishableKey: process.env.VITE_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY || null,
   });
 });
 
@@ -716,6 +726,17 @@ if (process.env.NODE_ENV !== 'production') {
       }
     }
   );
+}
+
+// Serve the small onboarding/configuration UI from the same deployable service.
+// API and webhook routes above always win; unknown API paths still return JSON.
+if (process.env.NODE_ENV === "production") {
+  const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+  const frontendDir = path.join(rootDir, "dist");
+  app.use(express.static(frontendDir, { index: false, maxAge: "1h" }));
+  app.get(/^\/(?!api(?:\/|$)|health(?:\/|$)).*/, (_req, res) => {
+    res.sendFile(path.join(frontendDir, "index.html"));
+  });
 }
 
 // ============================================================================

@@ -103,7 +103,7 @@ export async function getAttioClient(organizationId: string): Promise<Client | n
     );
 
     // 5. Create and connect MCP client
-    const client = new Client({ name: 'agent-ai', version: '1.0.0' });
+    const client = new Client({ name: 'slack-sales-agent', version: '1.0.0' });
     await client.connect(transport);
 
     return client;
