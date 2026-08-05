@@ -69,8 +69,8 @@ Requirements:
 - Anthropic API access
 
 ```bash
-git clone https://github.com/jake-cyrus-ai/slack-sales-agent-harness.git
-cd slack-sales-agent-harness
+git clone https://github.com/jake-cyrus-ai/slack-sales-agent.git
+cd slack-sales-agent
 pnpm install --frozen-lockfile
 cp .env.example .env
 pnpm run dev:all
