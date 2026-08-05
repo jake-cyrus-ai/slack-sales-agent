@@ -4,7 +4,7 @@
  * Verifies connectivity to critical external dependencies:
  * - Supabase (PostgreSQL database)
  * - Clerk (authentication)
- * - Inngest (background job processing)
+ * - Vercel Workflow (background job processing)
  * - OpenAI (LLM provider)
  * - Anthropic (LLM provider)
  * - Slack (messaging integration)
@@ -39,7 +39,7 @@ export interface HealthCheckResult {
   services: {
     supabase: ServiceCheck;
     clerk: ServiceCheck;
-    inngest: ServiceCheck;
+    workflow: ServiceCheck;
     openai: ServiceCheck;
     anthropic: ServiceCheck;
     slack: ServiceCheck;
@@ -149,71 +149,13 @@ async function checkClerk(): Promise<ServiceCheck> {
   }
 }
 
-async function checkInngest(): Promise<ServiceCheck> {
-  const startTime = Date.now();
-
-  try {
-    const signingKey = process.env.INNGEST_SIGNING_KEY;
-    const eventKey = process.env.INNGEST_EVENT_KEY;
-
-    if (!signingKey && !eventKey) {
-      if (process.env.NODE_ENV === "production") {
-        return {
-          status: "unhealthy",
-          latencyMs: Date.now() - startTime,
-          error: "Missing INNGEST_SIGNING_KEY and INNGEST_EVENT_KEY in production",
-        };
-      }
-      return {
-        status: "not_configured",
-        latencyMs: Date.now() - startTime,
-        error: "Inngest not configured (optional)",
-      };
-    }
-
-    if (!signingKey && process.env.NODE_ENV === "production") {
-      return {
-        status: "unhealthy",
-        latencyMs: Date.now() - startTime,
-        error: "Missing INNGEST_SIGNING_KEY in production",
-      };
-    }
-
-    if (!eventKey && process.env.NODE_ENV === "production") {
-      return {
-        status: "degraded",
-        latencyMs: Date.now() - startTime,
-        error: "Missing INNGEST_EVENT_KEY - event sending may fail",
-      };
-    }
-
-    if (eventKey) {
-      await withTimeout(
-        fetch(`https://inn.gs/e/${eventKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify([]),
-        }).then((res) => {
-          if (res.status >= 500) {
-            throw new Error(`Inngest API returned ${res.status}`);
-          }
-        }),
-        HEALTH_CHECK_TIMEOUT_MS,
-        "Inngest"
-      );
-    }
-
-    return {
-      status: "healthy",
-      latencyMs: Date.now() - startTime,
-    };
-  } catch (err) {
-    return {
-      status: "unhealthy",
-      latencyMs: Date.now() - startTime,
-      error: err instanceof Error ? err.message : "Unknown error",
-    };
-  }
+async function checkWorkflow(): Promise<ServiceCheck> {
+  const configured = Boolean(process.env.VERCEL || process.env.WORKFLOW_WORLD_URL);
+  return {
+    status: configured ? "healthy" : "not_configured",
+    latencyMs: 0,
+    ...(!configured && { error: "Workflow runtime is activated by Vercel at deploy time" }),
+  };
 }
 
 async function checkOpenAI(): Promise<ServiceCheck> {
@@ -402,17 +344,17 @@ function aggregateStatus(services: HealthCheckResult["services"]): ServiceStatus
 }
 
 export async function checkDownstreamHealth(): Promise<HealthCheckResult> {
-  const [supabase, clerk, inngest, openai, anthropic, slack, google] = await Promise.all([
+  const [supabase, clerk, workflow, openai, anthropic, slack, google] = await Promise.all([
     checkSupabase(),
     checkClerk(),
-    checkInngest(),
+    checkWorkflow(),
     checkOpenAI(),
     checkAnthropic(),
     checkSlack(),
     checkGoogle(),
   ]);
 
-  const services = { supabase, clerk, inngest, openai, anthropic, slack, google };
+  const services = { supabase, clerk, workflow, openai, anthropic, slack, google };
 
   return {
     status: aggregateStatus(services),

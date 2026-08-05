@@ -8,7 +8,7 @@
  *   npm run test:slack-interaction -- --custom '{"type": "block_actions", ...}'
  */
 
-import slackInteractions from '../../server/inngest/__tests__/fixtures/slack-interactions.json';
+import slackInteractions from '../../server/workflows/__tests__/fixtures/slack-interactions.json';
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -75,7 +75,7 @@ async function sendSlackInteraction() {
     if (response.ok) {
       console.log('\n✅ Interaction sent successfully!');
       console.log('\n💡 Next steps:');
-      console.log('   1. Check Inngest Dev Server dashboard: http://localhost:8288');
+      console.log('   1. Check the local Vercel terminal and Workflow run logs');
       console.log('   2. Monitor function execution and logs');
       console.log('   3. Check your database for updated records');
     } else {

@@ -24,7 +24,7 @@ import { getAuth, requireAuth } from "@clerk/express";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import type { Request } from "../types";
-import { inngest } from "../inngest/client";
+import { workflow } from "../workflows/client";
 import type { Logger } from "pino";
 import { fetchAttioWorkspaceMetadata } from "../src/services/attio-workspace.js";
 import { isOrgAdmin } from "../lib/auth";
@@ -396,8 +396,8 @@ router.post(
 
       req.log.info({ userId }, "Successfully stored credentials");
 
-      // Trigger initial calendar sync via Inngest (fire and forget)
-      inngest
+      // Trigger initial calendar sync via Vercel Workflow (fire and forget)
+      workflow
         .send({
           name: "calendar/sync",
           data: {

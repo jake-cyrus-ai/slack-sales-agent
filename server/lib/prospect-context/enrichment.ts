@@ -10,7 +10,7 @@ import { getSupabaseAdmin } from "../supabase";
 import {
   researchProspect,
   type ProspectResearchResult,
-} from "../../inngest/utils/prospect-research";
+} from "../../workflows/utils/prospect-research";
 import { logger } from "../logger";
 
 const log = logger.child({ component: "prospect-enrichment" });

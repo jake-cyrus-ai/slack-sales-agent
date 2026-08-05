@@ -16,7 +16,7 @@ import type {
   AutoSentEmail,
   NudgedDeal,
   MeetingFollowup,
-} from '../../../inngest/utils/activity-summary.js';
+} from '../../../workflows/utils/activity-summary.js';
 
 function createSettingsTools(userId: string, organizationId: string | null) {
 
@@ -124,8 +124,8 @@ function createSettingsTools(userId: string, organizationId: string | null) {
       }
 
       try {
-        // Lazy import to avoid circular deps (inngest utils → src boundary)
-        const { getActivitySummary } = await import('../../../inngest/utils/activity-summary.js');
+        // Lazy import to avoid circular deps (workflow utils → src boundary)
+        const { getActivitySummary } = await import('../../../workflows/utils/activity-summary.js');
 
         const { data: profile } = await supabase
           .from('profiles')

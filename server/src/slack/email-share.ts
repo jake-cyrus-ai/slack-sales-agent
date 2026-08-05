@@ -12,7 +12,7 @@
  */
 
 import { WebClient } from '@slack/web-api';
-import { getSupabaseAdmin } from '../../inngest/utils/supabase';
+import { getSupabaseAdmin } from '../../workflows/utils/supabase';
 import { generateEmbedding } from '../services/embeddings.js';
 import { getGmailClient } from '../services/google-client.js';
 import { logger } from '../../lib/logger.js';

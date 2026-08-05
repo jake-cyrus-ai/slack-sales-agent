@@ -17,7 +17,7 @@ export interface SkillTrigger {
   type: 'intent' | 'event' | 'schedule' | 'explicit' | 'compose';
   /** Regex patterns that hint at this skill (for 'intent' triggers) */
   patterns?: RegExp[];
-  /** Inngest event name (for 'event' triggers) */
+  /** Vercel Workflow event name (for 'event' triggers) */
   eventName?: string;
   /** Cron expression (for 'schedule' triggers) */
   cron?: string;

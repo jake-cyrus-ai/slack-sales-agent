@@ -13,7 +13,7 @@
 
 import { getSupabaseAdmin } from "../supabase";
 import { logger } from "../logger";
-import type { ConversationStage } from "../../inngest/utils/email-thread-context";
+import type { ConversationStage } from "../../workflows/utils/email-thread-context";
 
 const log = logger.child({ component: "prospect-context-dossier" });
 

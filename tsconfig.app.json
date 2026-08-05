@@ -26,5 +26,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "server/inngest"]
+  "include": ["src", "server/workflows"]
 }

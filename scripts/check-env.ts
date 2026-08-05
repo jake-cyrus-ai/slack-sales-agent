@@ -20,8 +20,7 @@ const requirements: Requirement[] = [
   { name: "CLERK_SECRET_KEY", why: "onboarding authentication" },
   { name: "VITE_CLERK_PUBLISHABLE_KEY", why: "onboarding authentication" },
   { name: "CLERK_WEBHOOK_SIGNING_SECRET", why: "identity synchronization" },
-  { name: "INNGEST_EVENT_KEY", why: "durable workflow events", productionOnly: true },
-  { name: "INNGEST_SIGNING_KEY", why: "durable workflow verification", productionOnly: true },
+  { name: "CRON_SECRET", why: "Vercel Cron route authentication", productionOnly: true },
   { name: "GOOGLE_CLIENT_ID", why: "Gmail and Calendar OAuth", oneOf: ["GOOGLE_CLIENT_ID", "GOOGLE_CALENDAR_CLIENT_ID"] },
   { name: "GOOGLE_CLIENT_SECRET", why: "Gmail and Calendar OAuth", oneOf: ["GOOGLE_CLIENT_SECRET", "GOOGLE_CALENDAR_CLIENT_SECRET"] },
 ];

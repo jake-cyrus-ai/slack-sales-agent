@@ -1,5 +1,5 @@
 /**
- * Web Browse Tool — visit a URL and extract page content via Browserbase.
+ * Web Browse Tool — visit a public URL and extract page content.
  *
  * Use when you need live, real-time data from a specific webpage that
  * Exa may not have indexed (pricing pages, job boards, recent blog posts).
@@ -7,8 +7,7 @@
 
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { config } from '../config.js';
-import { ToolAuthorizationError, withToolErrorHandling } from '../lib/tool-errors.js';
+import { withToolErrorHandling } from '../lib/tool-errors.js';
 import { browseAndExtract } from '../lib/browserbase.js';
 
 export function createWebBrowseTool() {
@@ -26,10 +25,6 @@ export function createWebBrowseTool() {
         .describe('The full URL to visit (e.g. "https://acme.com/pricing")'),
     }),
     func: withToolErrorHandling('web_browse', async ({ url }) => {
-      if (!config.browserbaseApiKey || !config.browserbaseProjectId) {
-        throw new ToolAuthorizationError('web_browse', 'Browserbase not configured.');
-      }
-
       const result = await browseAndExtract(url);
 
       if (result.error) {

@@ -1,54 +1,66 @@
 # Bring-your-own-keys deployment
 
-The production topology is one Node container plus managed Supabase, Clerk, and Inngest projects. The Node container serves the configuration UI, API, Slack webhooks, OAuth callbacks, and Inngest handler from one HTTPS origin.
+The reference deployment runs the web UI, Express API, Slack webhooks, OAuth callbacks, schedules, and durable workflows on Vercel. Supabase provides Postgres and storage; Clerk secures the configuration UI. Slack remains the product interface.
 
-## 1. Create the external projects
+## Requirements
 
-Create:
+- Node.js 22 and pnpm 10
+- a Vercel project on Pro or higher (the included frequent cron schedules and extended function duration exceed Hobby limits)
+- Supabase and Clerk projects
+- a Slack app created from `examples/slack-app-manifest.example.json`
+- Anthropic and OpenAI API keys
+- optional Google and Salesforce OAuth applications
 
-- a Supabase project;
-- a Clerk application with Organizations enabled;
-- an Inngest application;
-- a Slack application from `examples/slack-app-manifest.example.json`;
-- an Anthropic API key and an OpenAI API key;
-- optional Google and Salesforce OAuth applications.
+Attio and Granola use their provider-hosted MCP servers. They perform OAuth discovery and PKCE, so deployers do not create Attio or Granola client applications.
 
-Attio and Granola do not need deployer-created client IDs. Their hosted MCP servers use OAuth discovery, dynamic client registration, and PKCE.
-
-## 2. Create the database
-
-Install the Supabase CLI, then run:
+## Database
 
 ```bash
 supabase login
 supabase link --project-ref YOUR_PROJECT_REF
 supabase db push
-```
-
-Copy `.env.example` to `.env`, fill the Supabase URL and keys, generate a credential key, then bootstrap:
-
-```bash
-openssl rand -base64 32
+cp .env.example .env
+openssl rand -base64 32 # use this as CREDENTIAL_ENCRYPTION_KEY
 pnpm setup:supabase
 ```
 
-The bootstrap command stores the installation-specific credential key in the RLS-protected `app_secrets` table, creates the private `documents` bucket, and verifies an encrypt/decrypt round trip. Keep the original `CREDENTIAL_ENCRYPTION_KEY` in your secret manager for disaster recovery.
+The bootstrap stores an encrypted installation secret, creates the private documents bucket, and verifies encryption. Retain `CREDENTIAL_ENCRYPTION_KEY` in your secret manager. The server uses `SUPABASE_JWT_SECRET` for short-lived RLS-bound worker tokens; never expose it to the browser.
 
-This release uses a short-lived worker JWT signed with `SUPABASE_JWT_SECRET` to make background jobs obey RLS. Keep the project's legacy JWT secret available until the worker-token implementation is migrated to an imported signing key. Do not expose it to the browser.
+## Authentication
 
-## 3. Connect Clerk and Supabase
-
-In Clerk, enable Organizations. In Supabase Authentication → Third-Party Auth, add the Clerk integration. Configure the Clerk session token to include `role: "authenticated"`. Add a Clerk webhook pointing to:
+Enable Organizations in Clerk. In Supabase Authentication > Third-Party Auth, add Clerk and configure the Clerk session token with `role: "authenticated"`. Send Clerk organization, membership, and user create/update/delete webhooks to:
 
 ```text
 https://YOUR_DOMAIN/api/webhooks/clerk
 ```
 
-Subscribe to organization, organization-membership, and user create/update/delete events. Put its signing secret in `CLERK_WEBHOOK_SIGNING_SECRET`.
+Set the endpoint's signing secret as `CLERK_WEBHOOK_SIGNING_SECRET`.
 
-## 4. Configure callback URLs
+## Vercel
 
-For a deployment at `https://agent.example.com`, register:
+Import the repository into Vercel, leave the build settings from `vercel.json` in place, and add the server-side variables documented in `.env.example`. At minimum, production requires Slack, Supabase, Clerk, model, credential-encryption, workflow, and `CRON_SECRET` configuration.
+
+Validate the same values locally before deploying:
+
+```bash
+pnpm check:env:production
+pnpm run check:workflows
+```
+
+Vercel automatically discovers functions compiled by the Workflow package. `vercel.json` routes API and OAuth requests to Express and registers the durable scheduled jobs. Vercel Cron authenticates those routes using `CRON_SECRET`.
+
+Deploy with the dashboard or CLI:
+
+```bash
+pnpm dlx vercel@latest
+pnpm dlx vercel@latest --prod
+```
+
+For local callback testing, run `pnpm dev:vercel` and expose it through a temporary HTTPS tunnel. Provider redirect URLs must use that tunnel origin.
+
+## Provider callbacks
+
+For `https://agent.example.com`, register exactly:
 
 | Provider | URL |
 | --- | --- |
@@ -60,48 +72,16 @@ For a deployment at `https://agent.example.com`, register:
 | Attio MCP | `https://agent.example.com/api/oauth/attio/callback` |
 | Granola MCP | `https://agent.example.com/api/oauth/granola/callback` |
 
-Callback URLs must match exactly. Production uses HTTPS and does not support wildcard redirect URIs.
+Production requires HTTPS and exact redirect URI matching. Update `SERVER_BASE_URL`, `FRONTEND_URL`, and `ALLOWED_ORIGINS` before connecting providers.
 
-## 5. Validate environment variables
+## Smoke test
 
-Set the variables described in `.env.example`, then run:
+1. Sign in, create or select an organization, and install Slack.
+2. Connect Google and either Salesforce or Attio; optionally connect Granola.
+3. Verify each integration reports healthy.
+4. DM the Slack app and request an account summary and meeting brief.
+5. Draft an email, approve it in Slack, and confirm the provider outcome is audited.
+6. Propose a CRM mutation and confirm an authorized user must approve it.
+7. Correct a response and confirm feedback and preference provenance are recorded.
 
-```bash
-pnpm check:env:production
-```
-
-Google, Salesforce, Exa, Browserbase, and Gmail Pub/Sub are optional until their corresponding skills are enabled. Slack, Supabase, Clerk, Inngest, Anthropic, and OpenAI are required for the reference deployment.
-
-## 6. Deploy the Node container
-
-Any Docker host works:
-
-```bash
-docker build -t slack-sales-agent .
-docker run --env-file .env -p 3001:3001 slack-sales-agent
-```
-
-Render users can create a Blueprint from `render.yaml`. Railway, Fly.io, Cloud Run, and similar services can deploy the included Dockerfile directly. Set `SERVER_BASE_URL`, `FRONTEND_URL`, and `ALLOWED_ORIGINS` to the final HTTPS origin before connecting providers.
-
-## 7. Register Inngest
-
-Point the Inngest application at:
-
-```text
-https://YOUR_DOMAIN/api/inngest
-```
-
-Set both `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY`. Production startup refuses to run without the signing key.
-
-## 8. Smoke test
-
-1. Open the hosted URL and sign in.
-2. Create or select an organization.
-3. Connect Slack and Google.
-4. Optionally connect Salesforce, Attio, or Granola.
-5. DM the Slack app: `What can you help me with?`
-6. Request a meeting brief.
-7. Draft an email and verify the Slack approval buttons.
-8. Propose a CRM mutation and verify that it cannot execute without an authorized approval.
-
-Use `/health` for a liveness probe and protect `/health/deep` with `HEALTH_CHECK_SECRET` in public deployments.
+Use `/health` for liveness. Protect `/health/deep` with `HEALTH_CHECK_SECRET` on public deployments.

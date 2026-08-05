@@ -1,7 +1,7 @@
 /**
- * Express Server for Inngest Functions
+ * Express Server for Vercel Workflow Functions
  * 
- * This server handles Inngest function execution and webhooks.
+ * This server handles Vercel Workflow function execution and webhooks.
  * It runs alongside the Vite dev server in development and
  * serves as the backend in production.
  * 
@@ -22,9 +22,7 @@ import crypto from "crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pinoHttp from "pino-http";
-import { serve } from "inngest/express";
-import { inngest } from "../server/inngest/client";
-import { functions } from "../server/inngest/functions";
+import { workflow } from "../server/workflows/client";
 import {
   verifySlackSignature,
   verifyGmailSignature,
@@ -53,20 +51,20 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 /**
- * Safely send events to Inngest, gracefully handling startup race conditions
- * where the Inngest dev server isn't ready yet. Returns true if sent, false if dropped.
+ * Safely send events to Vercel Workflow, gracefully handling startup race conditions
+ * where the Vercel Workflow dev server isn't ready yet. Returns true if sent, false if dropped.
  */
-async function safeSendToInngest(
-  event: Parameters<typeof inngest.send>[0],
+async function dispatchWorkflowEventSafe(
+  event: Parameters<typeof workflow.send>[0],
   requestId?: any
 ): Promise<boolean> {
   try {
-    await inngest.send(event);
+    await workflow.send(event);
     return true;
   } catch (error: any) {
     if (error?.message?.includes("fetch failed")) {
       const eventName = Array.isArray(event) ? event.map(e => e.name).join(", ") : (event as any).name;
-      logger.warn({ requestId, eventName }, "Inngest not ready, dropped event");
+      logger.warn({ requestId, eventName }, "Vercel Workflow not ready, dropped event");
       return false;
     }
     throw error;
@@ -89,14 +87,10 @@ try {
   process.exit(1);
 }
 
-// Require critical Inngest + Supabase secrets in production
+// Require the legacy Supabase signing secret used for worker-scoped RLS tokens.
 if (process.env.NODE_ENV === "production") {
-  if (!process.env.INNGEST_SIGNING_KEY) {
-    logger.error("FATAL: INNGEST_SIGNING_KEY is required in production. Without it the /api/inngest endpoint accepts unsigned requests.");
-    process.exit(1);
-  }
   if (!process.env.SUPABASE_JWT_SECRET) {
-    logger.error("FATAL: SUPABASE_JWT_SECRET is required in production. It is used to mint user-scoped Supabase clients in Inngest functions.");
+    logger.error("FATAL: SUPABASE_JWT_SECRET is required in production. It is used to mint user-scoped Supabase clients in Vercel Workflow functions.");
     process.exit(1);
   }
 }
@@ -183,7 +177,7 @@ app.use(
 );
 
 // Clerk authentication middleware is applied per-route below (not globally)
-// so that Inngest, health-check, and webhook routes are never blocked by
+// so that Vercel Workflow, health-check, and webhook routes are never blocked by
 // missing Clerk keys or unauthenticated requests.
 
 // Rate limiting for webhook endpoints
@@ -278,21 +272,6 @@ app.get("/health/deep", deepHealthLimiter, async (req: Request, res: Response) =
 });
 
 // ============================================================================
-// Inngest Serve Handler
-// ============================================================================
-
-// Restrict to the methods Inngest actually uses. Express's `app.use` would
-// also route PATCH/OPTIONS/DELETE into the handler, which has been a CVE
-// vector in past SDK versions.
-const inngestHandler = serve({
-  client: inngest,
-  functions,
-});
-app.get("/api/inngest", apiLimiter, inngestHandler);
-app.post("/api/inngest", apiLimiter, inngestHandler);
-app.put("/api/inngest", apiLimiter, inngestHandler);
-
-// ============================================================================
 // Webhook Endpoints
 // ============================================================================
 
@@ -332,8 +311,8 @@ app.post(
 
       req.log.info({ emailAddress: message.emailAddress }, "Gmail notification received");
 
-      // 4. Send to Inngest
-      await safeSendToInngest({
+      // 4. Send to Vercel Workflow
+      await dispatchWorkflowEventSafe({
         name: "email/notification",
         data: {
           emailAddress: message.emailAddress,
@@ -386,7 +365,7 @@ app.post(
         });
       }
 
-      // 4. Extract event data and send to Inngest
+      // 4. Extract event data and send to Vercel Workflow
       // Preserve top-level team_id so downstream workspace resolution works.
       const eventData = req.body.event || req.body;
       const rawEventType = eventData.type || "event";
@@ -395,7 +374,7 @@ app.post(
         team_id: req.body.team_id || req.body.team?.id || eventData.team_id,
       };
 
-      // Skip non-user events before they reach Inngest. These are system/
+      // Skip non-user events before they reach Vercel Workflow. These are system/
       // metadata events that the bot should never process:
       // - message_changed: change notifications (not the edit itself)
       // - message_deleted: deletion notifications
@@ -426,21 +405,21 @@ app.post(
       }
 
       // Normalize Slack event types so that both direct messages and channel
-      // app_mention events flow through the same Inngest "slack/message"
+      // app_mention events flow through the same Vercel Workflow "slack/message"
       // pipeline. All other Slack events fall back to the generic
       // "slack/event" handler.
-      const inngestEventName =
+      const workflowEventName =
         rawEventType === "message" || rawEventType === "app_mention"
           ? "slack/message"
           : "slack/event";
 
-      const sent = await safeSendToInngest({
-        name: inngestEventName as any,
+      const sent = await dispatchWorkflowEventSafe({
+        name: workflowEventName as any,
         data: eventPayload,
       }, req.id);
 
       if (sent) {
-        req.log.info({ inngestEventName }, "Slack event sent to Inngest");
+        req.log.info({ workflowEventName }, "Slack event sent to Vercel Workflow");
       }
 
       res.status(200).json({
@@ -489,8 +468,8 @@ app.post(
 
       req.log.info({ type: payload.type, action: payload.actions?.[0]?.action_id }, "Slack interactivity payload");
 
-      // 4. Send to Inngest
-      const sent = await safeSendToInngest({
+      // 4. Send to Vercel Workflow
+      const sent = await dispatchWorkflowEventSafe({
         name: "slack/interaction",
         data: {
           type: payload.type,
@@ -502,7 +481,7 @@ app.post(
       }, req.id);
 
       if (sent) {
-        req.log.info("Slack interactivity sent to Inngest");
+        req.log.info("Slack interactivity sent to Vercel Workflow");
       }
 
       // 5. Respond immediately (Slack requires quick response)
@@ -593,6 +572,26 @@ app.use("/api", featureFlagsRouter);
 app.use("/api", onboardingRouter);
 app.use("/api", feedbackRouter);
 
+app.get("/api/cron/:workflowId", async (req: Request, res: Response) => {
+  const cronSecret = process.env.CRON_SECRET;
+  if (
+    process.env.NODE_ENV === "production" &&
+    (!cronSecret || req.header("authorization") !== `Bearer ${cronSecret}`)
+  ) {
+    return res.status(401).json({ error: "Unauthorized", requestId: req.id });
+  }
+  try {
+    const workflowId = Array.isArray(req.params.workflowId)
+      ? req.params.workflowId[0]
+      : req.params.workflowId;
+    const result = await workflow.startScheduled(workflowId);
+    return res.status(202).json({ accepted: true, ...result, requestId: req.id });
+  } catch (error) {
+    req.log.error({ err: error, workflowId: req.params.workflowId }, "Failed to start scheduled workflow");
+    return res.status(404).json({ error: "Unknown scheduled workflow", requestId: req.id });
+  }
+});
+
 // ============================================================================
 // Test Endpoints (Development Only)
 // ============================================================================
@@ -619,22 +618,22 @@ if (process.env.NODE_ENV !== 'production') {
         const eventData = req.body.event || req.body;
         const rawEventType = eventData.type || "message";
 
-        const inngestEventName =
+        const workflowEventName =
           rawEventType === "message" || rawEventType === "app_mention"
             ? "slack/message"
             : "slack/event";
 
-        await safeSendToInngest({
-          name: inngestEventName as any,
+        await dispatchWorkflowEventSafe({
+          name: workflowEventName as any,
           data: eventData,
         }, req.id);
 
-        req.log.info({ inngestEventName }, "TEST: Event sent to Inngest");
+        req.log.info({ workflowEventName }, "TEST: Event sent to Vercel Workflow");
 
         res.status(200).json({
           success: true,
-          message: 'Test message sent to Inngest',
-          eventType: inngestEventName,
+          message: 'Test message sent to Vercel Workflow',
+          eventType: workflowEventName,
           requestId: req.id,
         });
       } catch (error) {
@@ -658,7 +657,7 @@ if (process.env.NODE_ENV !== 'production') {
         const payloadStr = req.body.payload || JSON.stringify(req.body);
         const payload = typeof payloadStr === 'string' ? JSON.parse(payloadStr) : payloadStr;
 
-        await safeSendToInngest({
+        await dispatchWorkflowEventSafe({
           name: "slack/interaction",
           data: {
             type: payload.type,
@@ -669,11 +668,11 @@ if (process.env.NODE_ENV !== 'production') {
           },
         }, req.id);
 
-        req.log.info("TEST: Interaction sent to Inngest");
+        req.log.info("TEST: Interaction sent to Vercel Workflow");
 
         res.status(200).json({
           success: true,
-          message: 'Test interaction sent to Inngest',
+          message: 'Test interaction sent to Vercel Workflow',
           requestId: req.id,
         });
       } catch (error) {
@@ -706,7 +705,7 @@ if (process.env.NODE_ENV !== 'production') {
           message = req.body;
         }
 
-        await safeSendToInngest({
+        await dispatchWorkflowEventSafe({
           name: "email/notification",
           data: {
             emailAddress: message.emailAddress,
@@ -714,11 +713,11 @@ if (process.env.NODE_ENV !== 'production') {
           },
         }, req.id);
 
-        req.log.info("TEST: Gmail notification sent to Inngest");
+        req.log.info("TEST: Gmail notification sent to Vercel Workflow");
 
         res.status(200).json({
           success: true,
-          message: 'Test Gmail notification sent to Inngest',
+          message: 'Test Gmail notification sent to Vercel Workflow',
           requestId: req.id,
         });
       } catch (error) {
@@ -803,7 +802,7 @@ async function validateEncryptionKey(): Promise<void> {
   }
 }
 
-if (!isTestEnv) {
+if (!isTestEnv && !process.env.VERCEL) {
   validateEncryptionKey().then(() => {
   const server = app.listen(PORT, () => {
     const supabaseHost = (() => {

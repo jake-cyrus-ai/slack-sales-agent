@@ -56,7 +56,7 @@ export default tseslint.config(
     //   server/index.ts          — Top-level server bootstrap
     //   server/webhookVerification.ts
     //   server/lib/**            — Server-side utility libs
-    //   server/inngest/**        — Inngest function bodies (event/webhook handlers)
+    //   server/workflows/**        — Vercel Workflow function bodies (event/webhook handlers)
     //   server/src/salesforce/** — Salesforce SDK adapter layer
     //   server/src/attio/**      — Attio SDK adapter layer
     //   server/src/tools/**      — Tool implementations calling external APIs
@@ -73,7 +73,7 @@ export default tseslint.config(
       "server/lib/**/*.{ts,tsx}",
       "server/routes/**/*.{ts,tsx}",
       "server/webhooks/**/*.{ts,tsx}",
-      "server/inngest/**/*.{ts,tsx}",
+      "server/workflows/**/*.{ts,tsx}",
       "server/src/index.ts",
       "server/src/attio/**/*.{ts,tsx}",
       "server/src/lib/**/*.{ts,tsx}",

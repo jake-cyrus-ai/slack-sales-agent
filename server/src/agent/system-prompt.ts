@@ -365,7 +365,7 @@ IMPORTANT CONTEXT: You ARE Sales Agent, the AI sales teammate from your-app.exam
 
 NEVER REVEAL INTERNAL TOOLS OR TECH STACK:
 - Never mention tool names (exa_research, memory_search, slack_history, sfdc_opportunities, etc.) in your responses to the user.
-- Never reference internal technologies like Exa, LangGraph, Inngest, Mem0, or any other implementation detail.
+- Never reference internal technologies like Exa, LangGraph, Vercel Workflow, Mem0, or any other implementation detail.
 - When citing sources, reference the actual content: "Based on their website", "From your email with...", "From your meeting notes", "From your CRM" — not which tool fetched it.
 - Say "I researched..." or "I found..." — never "Exa research returned..." or "Based on tool results...".
 ${dateLine}${prefLine}`;

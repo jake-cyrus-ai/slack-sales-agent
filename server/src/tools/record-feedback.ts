@@ -16,7 +16,7 @@
 
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { writeFeedbackEvent } from '../../inngest/utils/feedback-capture.js';
+import { writeFeedbackEvent } from '../../workflows/utils/feedback-capture.js';
 import { logger } from '../../lib/logger.js';
 
 const log = logger.child({ tool: 'record_user_feedback' });

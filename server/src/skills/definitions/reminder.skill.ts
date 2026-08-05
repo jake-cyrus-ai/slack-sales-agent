@@ -13,7 +13,7 @@ import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { supabase } from '../../lib/supabase.js';
 import { basePrompt } from '../../agent/system-prompt.js';
-import { localDateTimeToUTC, toLocalDisplay } from '../../../inngest/utils/timezone-helpers.js';
+import { localDateTimeToUTC, toLocalDisplay } from '../../../workflows/utils/timezone-helpers.js';
 import type { SkillDefinition } from '../types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────

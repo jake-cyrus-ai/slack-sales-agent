@@ -5,7 +5,7 @@ import { resolveSlackUser } from './user-mapper.js';
 import { formatMessageForSlack } from './formatter.js';
 import { runSupervisor } from '../agent/supervisor.js';
 import { buildPreferenceInstructions } from '../agent/system-prompt.js';
-import { inngest } from '../../inngest/client.js';
+import { workflow } from '../../workflows/client.js';
 import { logger } from '../../lib/logger.js';
 
 const log = logger.child({ component: 'slack-handler' });
@@ -21,7 +21,7 @@ export interface SlackMessageInput {
 /**
  * In-memory per-thread lock for the direct handler path.
  *
- * The primary path (Inngest) uses Inngest's concurrency config for
+ * The primary path (Vercel Workflow) uses Vercel Workflow's concurrency config for
  * per-thread serialization. This lock covers the direct handler used
  * by tests and the Salesforce Slack bot. Not distributed — only works
  * within a single process. For multi-instance deployments, rely on
@@ -37,7 +37,7 @@ export async function processMessage(input: SlackMessageInput): Promise<void> {
   const { text, slackUserId, channelId, threadTs, teamId } = input;
 
   // Skip if this thread is already being processed (prevents message pile-up).
-  // Primary concurrency protection is via Inngest (limit: 1 per thread).
+  // Primary concurrency protection is via Vercel Workflow (limit: 1 per thread).
   // This lock covers the direct handler path (tests, SFDC bot) only.
   const lockKey = `${channelId}:${threadTs}`;
   const existingLock = threadLocks.get(lockKey);
@@ -200,7 +200,7 @@ export async function processMessage(input: SlackMessageInput): Promise<void> {
     // 12. Memory save now handled by supervisor (universal, not Slack-only)
 
     // 13. Queue preference learning (debounced — runs async, skips if analyzed recently)
-    inngest.send({
+    workflow.send({
       name: 'learning/analyze-preferences',
       data: { userId: agentUserId },
     }).catch(() => {}); // Non-blocking
@@ -223,7 +223,7 @@ export async function processMessage(input: SlackMessageInput): Promise<void> {
  * (slack_workspace_id, slack_channel_id, slack_thread_ts) ensures only one wins.
  * The loser gets back the winner's conversation_id via ON CONFLICT.
  *
- * This is a safety net — the primary protection is Inngest's per-thread
+ * This is a safety net — the primary protection is Vercel Workflow's per-thread
  * concurrency limit (limit: 1), which serializes all messages within a thread.
  */
 async function getOrCreateConversation(

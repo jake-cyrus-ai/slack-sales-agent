@@ -8,7 +8,7 @@
  *   npm run test:slack-message -- --custom '{"text": "Custom message"}'
  */
 
-import slackMessages from '../../server/inngest/__tests__/fixtures/slack-messages.json';
+import slackMessages from '../../server/workflows/__tests__/fixtures/slack-messages.json';
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -83,7 +83,7 @@ async function sendSlackMessage() {
     if (response.ok) {
       console.log('\n✅ Message sent successfully!');
       console.log('\n💡 Next steps:');
-      console.log('   1. Check Inngest Dev Server dashboard: http://localhost:8288');
+      console.log('   1. Check the local Vercel terminal and Workflow run logs');
       console.log('   2. Monitor function execution and logs');
       console.log('   3. Check your database for created records');
     } else {

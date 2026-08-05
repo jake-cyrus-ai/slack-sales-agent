@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm run build",
+  "fluid": true,
+  "crons": [
+    { "path": "/api/cron/evaluate-all-orgs-readiness", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/scan-new-meetings", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/scan-pending-followups", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/sync-all-calendars", "schedule": "0 * * * *" },
+    { "path": "/api/cron/backfill-usage-rollups", "schedule": "0 2 * * *" },
+    { "path": "/api/cron/scan-morning-briefings", "schedule": "0 * * * *" },
+    { "path": "/api/cron/scan-upcoming-meetings", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/scan-action-digests", "schedule": "0 * * * *" },
+    { "path": "/api/cron/renew-gmail-watches", "schedule": "0 */12 * * *" },
+    { "path": "/api/cron/scan-due-reminders", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/poll-gmail-inboxes", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/scan-feedback-learnings", "schedule": "0 * * * *" }
+  ]
+}

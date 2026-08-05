@@ -1,12 +1,12 @@
 /**
  * Calendar API Routes
  *
- * Handles calendar-related API endpoints. Dispatches to Inngest for async processing.
+ * Handles calendar-related API endpoints. Dispatches to Vercel Workflow for async processing.
  */
 
 import { Router, Response } from "express";
 import { getAuth, requireAuth } from "@clerk/express";
-import { inngest } from "../inngest/client";
+import { workflow } from "../workflows/client";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import type { Request } from "../types";
@@ -54,7 +54,7 @@ interface SyncRequestBody {
  * POST /api/calendar/sync
  *
  * Triggers calendar sync for the authenticated user.
- * Sends a "calendar/sync" Inngest event and returns 202 Accepted.
+ * Sends a "calendar/sync" Vercel Workflow event and returns 202 Accepted.
  *
  * Replaces: supabase.functions.invoke('sync-calendar-events', ...)
  */
@@ -123,8 +123,8 @@ router.post(
         }
       }
 
-      // Send Inngest event for async calendar sync
-      await inngest.send({
+      // Send Vercel Workflow event for async calendar sync
+      await workflow.send({
         name: "calendar/sync",
         data: {
           userId: clerkUserId,
@@ -167,7 +167,7 @@ interface CreateEventRequestBody {
  * POST /api/calendar/create
  *
  * Creates a new calendar event for the authenticated user.
- * Sends a "calendar/create-event" Inngest event and returns 202 Accepted.
+ * Sends a "calendar/create-event" Vercel Workflow event and returns 202 Accepted.
  */
 router.post(
   "/calendar/create",
@@ -264,8 +264,8 @@ router.post(
         }
       }
 
-      // Send Inngest event for async calendar event creation
-      await inngest.send({
+      // Send Vercel Workflow event for async calendar event creation
+      await workflow.send({
         name: "calendar/create-event",
         data: {
           userId: clerkUserId,
@@ -469,8 +469,8 @@ router.post(
       // Create a new job ID
       const jobId = `prep-${crypto.randomUUID()}`;
 
-      // Send Inngest event for async meeting prep
-      await inngest.send({
+      // Send Vercel Workflow event for async meeting prep
+      await workflow.send({
         name: "calendar/meeting-prep",
         data: {
           userId: clerkUserId,
@@ -658,7 +658,7 @@ router.post(
 
       req.log.info({ company }, "Sales prep requested");
 
-      const { getAnthropicClient } = await import("../inngest/utils/llm/clients");
+      const { getAnthropicClient } = await import("../workflows/utils/llm/clients");
       const anthropic = getAnthropicClient();
 
       const prompt = `Generate a concise competitive sales brief for a meeting with ${company}.

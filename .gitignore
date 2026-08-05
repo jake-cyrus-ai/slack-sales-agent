@@ -22,6 +22,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.output/
 server/dist/
 *.local
 
@@ -74,3 +75,4 @@ tsconfig.*.tsbuildinfo
 .claude-test-credentials
 supabase-pat
 .vercel
+/.swc

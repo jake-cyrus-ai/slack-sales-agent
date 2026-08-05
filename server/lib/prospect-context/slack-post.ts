@@ -26,7 +26,7 @@ import {
   sendSlackBlockMessage,
   sendSlackMessage,
   updateSlackMessage,
-} from "../../inngest/utils/slack-helpers";
+} from "../../workflows/utils/slack-helpers";
 import {
   recordDossierSlackPost,
   type ProspectDossier,

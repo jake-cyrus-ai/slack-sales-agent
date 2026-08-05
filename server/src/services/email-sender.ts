@@ -1,6 +1,6 @@
 /**
  * Email Sender — shared helper for sending emails via Gmail API.
- * Used by web approval routes and Inngest email-actions.
+ * Used by web approval routes and Vercel Workflow email-actions.
  */
 
 import { getGoogleTokens, googleApiFetch } from './token-manager.js';

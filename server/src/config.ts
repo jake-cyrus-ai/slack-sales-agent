@@ -73,12 +73,6 @@ export const config = {
 
   // Research
   exaApiKey: optional('EXA_API_KEY'),
-  browserbaseApiKey: optional('BROWSERBASE_API_KEY'),
-  browserbaseProjectId: optional('BROWSERBASE_PROJECT_ID'),
-
-  // Inngest
-  inngestEventKey: optional('INNGEST_EVENT_KEY'),
-  inngestSigningKey: optional('INNGEST_SIGNING_KEY'),
 
   // Salesforce (shared Connected App for per-org OAuth)
   salesforceConnectedAppClientId: optional('SALESFORCE_CONNECTED_APP_CLIENT_ID'),

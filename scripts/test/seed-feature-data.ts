@@ -608,8 +608,8 @@ async function seedFeatureData() {
     console.log(`   User mapping: ${userId} → U_SEED_USER`);
 
     console.log('\n💡 You can now test these features locally!');
-    console.log('   - Stalled deals: trigger scan-stalled-deals via Inngest dashboard');
-    console.log('   - Meeting follow-ups: trigger scan-new-meetings via Inngest dashboard');
+    console.log('   - Stalled deals: trigger scan-stalled-deals via Vercel Workflow dashboard');
+    console.log('   - Meeting follow-ups: trigger scan-new-meetings via Vercel Workflow dashboard');
     console.log('\n' + '='.repeat(80));
 
   } catch (error) {

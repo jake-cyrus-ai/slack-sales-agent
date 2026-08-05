@@ -2,7 +2,7 @@
  * LangGraph Supervisor — loadContext → classify → route → specialists (parallel) → synthesize → END.
  *
  * Phase 3 rewrite: specialist agents fan out in parallel via Send(),
- * no more planNode. Deep agents (prospecting) can be dispatched via Inngest.
+ * no more planNode. Deep agents (prospecting) can be dispatched via Vercel Workflow.
  */
 
 import { StateGraph, END, Send } from '@langchain/langgraph';
@@ -609,7 +609,7 @@ async function loadContextNode(state: SupervisorStateType) {
   let enrichedAvailableContext = availableSkillContext;
   if (state.organizationId) {
     try {
-      const { getOrgFeatureFlags } = await import('../../inngest/utils/feature-flags.js');
+      const { getOrgFeatureFlags } = await import('../../workflows/utils/feature-flags.js');
       const orgFlags = await getOrgFeatureFlags(state.organizationId);
       const autonomousEnabled = orgFlags.autonomous_mode?.enabled === true;
       const agentLedBlock = agentLedContextBlock(autonomousEnabled, orgFlags.guardrails);

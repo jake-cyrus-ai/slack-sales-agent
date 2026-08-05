@@ -15,4 +15,4 @@ See the [README](README.md) for setup instructions.
 - TypeScript strict mode on the frontend; `strictNullChecks: false` on the server (historical; new code should handle nulls explicitly)
 - Pino for structured logging on the server — never `console.*`
 - Express route handlers follow the pattern in `docs/ARCHITECTURE.md`
-- Inngest functions use `step.run()` for all async work to get retryability
+- Vercel Workflow functions use `step.run()` for all async work to get retryability

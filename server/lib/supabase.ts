@@ -12,9 +12,9 @@
  *                                    work, service-role-only tables). Each call
  *                                    site should justify the bypass in a comment.
  *
- * Implementation lives under server/inngest/utils/supabase.ts and is re-exported
+ * Implementation lives under server/workflows/utils/supabase.ts and is re-exported
  * here so Express routes can import from a clean `lib/` path without depending
- * on Inngest internals.
+ * on Vercel Workflow internals.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuth } from "@clerk/express";
@@ -23,7 +23,7 @@ import {
   getSupabaseAdmin,
   getSupabaseForUser,
   getSupabaseWithAuth,
-} from "../inngest/utils/supabase";
+} from "../workflows/utils/supabase";
 
 export { getSupabaseAdmin, getSupabaseForUser, getSupabaseWithAuth };
 

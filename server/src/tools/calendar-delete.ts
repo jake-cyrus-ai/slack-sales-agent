@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { getCalendarClient } from '../services/google-client.js';
 import { resolveEventId } from './calendar-resolve.js';
 import { supabase } from '../lib/supabase.js';
-import { sendSlackBlockMessage } from '../../inngest/utils/slack-helpers.js';
+import { sendSlackBlockMessage } from '../../workflows/utils/slack-helpers.js';
 import { logger } from '../../lib/logger.js';
 
 const log = logger.child({ tool: 'calendar_delete' });

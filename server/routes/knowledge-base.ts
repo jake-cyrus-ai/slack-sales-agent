@@ -74,7 +74,7 @@ const resolveOrgIdFromClerk = async (
  * POST /api/knowledge-base/search
  *
  * Performs vector similarity search on the knowledge base.
- * This is a synchronous operation - no Inngest involved.
+ * This is a synchronous operation - no Vercel Workflow involved.
  */
 router.post(
   "/knowledge-base/search",

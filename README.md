@@ -5,7 +5,7 @@ A Slack-native, open-source sales agent platform that connects to email, calenda
 ## What ships
 
 - Slack installation, signed Events API ingestion, DMs, mentions, threads, and interactive approvals
-- durable Inngest workflows with retries, concurrency controls, delayed work, and failure reporting
+- durable Vercel workflow dispatch with retries, delayed work, persisted human approvals, and failure reporting
 - a LangGraph supervisor that composes sales skills
 - Gmail and Google Calendar OAuth, search, drafting, sending, and meeting preparation
 - direct Attio and Granola hosted-MCP connections using OAuth discovery and PKCE
@@ -15,14 +15,14 @@ A Slack-native, open-source sales agent platform that connects to email, calenda
 - a small Clerk-authenticated configuration UI; Slack remains the primary product surface
 
 ```text
-Slack → verified event → tenant resolution → Inngest → supervisor
+Slack → verified event → tenant resolution → Vercel Workflow → supervisor
       → sales skills → approval/autonomous policy → provider action
       → audit, feedback, and preference learning
 ```
 
 ## Quick start
 
-Requirements: Node.js 22+, pnpm 10+, a Supabase project, Clerk, Inngest, Slack, Anthropic, and OpenAI.
+Requirements: Node.js 22+, pnpm 10+, a Supabase project, Clerk, Vercel, Slack, Anthropic, and OpenAI. The included high-frequency cron schedules require a Vercel plan that supports them.
 
 ```bash
 git clone https://github.com/jake-cyrus-ai/slack-sales-agent.git
@@ -48,9 +48,9 @@ pnpm check:env
 pnpm dev:all
 ```
 
-The UI runs at `http://localhost:5173`, the API at `http://localhost:3001`, and local Inngest at `http://localhost:8288`.
+Vercel CLI prints the local origin (normally `http://localhost:3000`) and serves the UI, API, callbacks, and workflow runtime together.
 
-For a production bring-your-own-keys walkthrough, callback URL table, Clerk setup, Docker instructions, and smoke test, see [Deployment](docs/DEPLOYMENT.md). Provider-specific details are in [Google OAuth](docs/guides/GOOGLE-OAUTH.md) and [Salesforce OAuth](docs/guides/SALESFORCE-ONBOARDING.md).
+For a production bring-your-own-keys walkthrough, callback URL table, Clerk setup, and smoke test, see [Deployment](docs/DEPLOYMENT.md). Provider-specific details are in [Google OAuth](docs/guides/GOOGLE-OAUTH.md) and [Salesforce OAuth](docs/guides/SALESFORCE-ONBOARDING.md).
 
 ## Integration ownership
 
@@ -70,8 +70,9 @@ Provider tokens are encrypted before persistence and are never included in model
 pnpm lint
 pnpm exec tsc --noEmit
 pnpm build:server:check
+pnpm check:workflows
 pnpm test:run
-pnpm test:inngest
+pnpm test:workflow
 pnpm test:tools
 pnpm build
 pnpm build:server

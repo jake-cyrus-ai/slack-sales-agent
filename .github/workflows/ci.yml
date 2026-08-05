@@ -51,8 +51,11 @@ jobs:
       - name: Server typecheck
         run: pnpm run build:server:check
 
-      - name: Run Inngest tests
-        run: pnpm exec vitest run --config server/inngest/__tests__/vitest.config.ts --dir server/inngest/__tests__
+      - name: Validate Vercel workflows
+        run: pnpm run check:workflows
+
+      - name: Run workflow tests
+        run: pnpm run test:workflow
 
       - name: Run provider tool tests
         run: pnpm run test:tools

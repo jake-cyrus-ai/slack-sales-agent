@@ -680,8 +680,8 @@ CREATE TABLE IF NOT EXISTS public.slack_error_events (
   thinking_ts           text,
   thread_permalink      text,
   conversation_id       uuid,
-  inngest_run_id        text,
-  inngest_function_id   text,
+  workflow_run_id        text,
+  workflow_function_id   text,
   attempt               int,
   step                  text,
   error_name            text,
@@ -1508,8 +1508,8 @@ CREATE TABLE IF NOT EXISTS public.handoff_dispatches (
   customer_intro_sent_at    timestamptz,
   rep_debrief_email_sent_at timestamptz,
   rep_debrief_slack_sent_at timestamptz,
-  pre_meeting_brief_inngest_id  text,
-  post_meeting_recap_inngest_id text
+  pre_meeting_brief_workflow_id  text,
+  post_meeting_recap_workflow_id text
 );
 
 -- =============================================================================

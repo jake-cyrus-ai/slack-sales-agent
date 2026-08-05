@@ -12,10 +12,10 @@ import { getAuth, requireAuth } from "@clerk/express";
 import { isOrgAdmin } from "../lib/auth";
 import { getSupabaseAdmin } from "../lib/supabase";
 import { resolveInternalOrgId } from "../lib/org-resolver";
-import { getActivitySummary } from "../inngest/utils/activity-summary";
-import { getGuardrails, checkEmailRateLimit } from "../inngest/utils/feature-flags";
-import { getLocalDate } from "../inngest/utils/timezone-helpers";
-import { inngest } from "../inngest/client";
+import { getActivitySummary } from "../workflows/utils/activity-summary";
+import { getGuardrails, checkEmailRateLimit } from "../workflows/utils/feature-flags";
+import { getLocalDate } from "../workflows/utils/timezone-helpers";
+import { workflow } from "../workflows/client";
 import type { Request } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -925,7 +925,7 @@ router.get(
       }
 
       // Dynamic import: slack-helpers pulls in crypto deps not needed by other automation routes
-      const { decryptBotToken } = await import("../inngest/utils/slack-helpers");
+      const { decryptBotToken } = await import("../workflows/utils/slack-helpers");
       let botToken: string;
       try {
         botToken = await decryptBotToken(rawToken);
@@ -1265,9 +1265,9 @@ router.put(
       }
 
       // Ensure Gmail push notifications are registered for the Autonomous agent's inbox.
-      // This is fire-and-forget — if it fails, Inngest retries automatically.
+      // This is fire-and-forget — if it fails, Vercel Workflow retries automatically.
       try {
-        await inngest.send({
+        await workflow.send({
           name: "email/ensure-gmail-watch",
           data: {
             userId: targetUserId,

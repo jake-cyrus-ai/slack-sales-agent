@@ -22,7 +22,7 @@ import {
   isSalesforceConfiguredForOrg,
   getSalesforceConnection,
 } from "../../src/salesforce/client.js";
-import type { ConversationStage } from "../../inngest/utils/email-thread-context";
+import type { ConversationStage } from "../../workflows/utils/email-thread-context";
 
 /** Map conversation stages to Attio pipeline stage names. */
 const STAGE_TO_ATTIO: Record<ConversationStage, string> = {
