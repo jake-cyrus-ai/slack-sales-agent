@@ -45,7 +45,7 @@ jobs:
         run: pnpm run test:tools
 
       - name: Run frontend tests
-        run: pnpm exec vitest run --config vitest.config.ts
+        run: pnpm run test:run
 
       - name: Build frontend
         run: pnpm run build
