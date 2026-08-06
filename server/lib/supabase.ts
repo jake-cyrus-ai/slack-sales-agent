@@ -17,7 +17,7 @@
  * on Vercel Workflow internals.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getAuth } from "@clerk/express";
+import { getAuth } from "./auth";
 import type { Request } from "../types";
 import {
   getSupabaseAdmin,
@@ -33,14 +33,14 @@ export { getSupabaseAdmin, getSupabaseForUser, getSupabaseWithAuth };
  * only return rows the user is permitted to see.
  *
  * Must be called inside a route protected by `requireAuth()`; throws if
- * there is no userId in the Clerk session.
+ * there is no userId in the Supabase Auth session.
  */
 export function getSupabaseForRequest(req: Request): SupabaseClient {
-  const { userId } = getAuth(req);
-  if (!userId) {
+  const { userId, token } = getAuth(req);
+  if (!userId || !token) {
     throw new Error(
       "getSupabaseForRequest called without an authenticated user — gate the route with requireAuth() first"
     );
   }
-  return getSupabaseForUser(userId);
+  return getSupabaseWithAuth(token);
 }

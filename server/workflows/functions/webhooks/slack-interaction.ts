@@ -71,7 +71,7 @@ async function updateSlackMessageWithBlocks(
 /**
  * Helper: Check org-level permissions for a user.
  *
- * Looks up the user's role in organization_users (synced from Clerk via
+ * Looks up the user's role in organization_users (validated using Supabase Auth and
  * webhooks). Returns the role string or null if the user is not a member.
  */
 async function checkOrgPermission(

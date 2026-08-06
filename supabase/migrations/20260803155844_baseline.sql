@@ -227,7 +227,6 @@ CREATE TABLE IF NOT EXISTS public.organizations (
   owner_user_id text,
   settings    jsonb       NOT NULL DEFAULT '{}',
   feature_flags jsonb     NOT NULL DEFAULT '{}',
-  clerk_id    text        UNIQUE,
   autonomous_agent_user_id text,
   created_at  timestamptz NOT NULL DEFAULT now(),
   updated_at  timestamptz NOT NULL DEFAULT now()

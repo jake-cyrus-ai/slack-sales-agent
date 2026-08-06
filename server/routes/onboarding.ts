@@ -10,17 +10,17 @@
  *
  * Authorization model: the customer onboarding flow is gated by possession of
  * a valid, pending, unexpired invite token. The caller is a freshly signed-up
- * Clerk user who is NOT yet a member of the org and has no active Clerk org —
+ * authenticated user who is NOT yet a member of the org and has no active organization —
  * so org-admin checks (as in admin.ts) don't apply here. Instead, every route
  * validates the supplied invite token against `organization_invites` and
  * derives the target organization from that row. The token is the capability.
  *
  * All routes are `requireAuth()` gated so the acting user id comes from the
- * Clerk session (getAuth) and can never be spoofed by the client.
+ * Supabase Auth session (getAuth) and can never be spoofed by the client.
  */
 
 import { Router, type Response } from "express";
-import { getAuth, requireAuth } from "@clerk/express";
+import { getAuth, requireAuth } from "../lib/auth";
 import { z } from "zod";
 import crypto from "crypto";
 import type { Request } from "../types";

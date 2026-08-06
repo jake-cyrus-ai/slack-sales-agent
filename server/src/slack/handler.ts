@@ -77,7 +77,7 @@ export async function processMessage(input: SlackMessageInput): Promise<void> {
       // Ignore if reaction already exists
     }
 
-    // 4. Resolve Slack user → Sales Agent user (agentUserId is the Clerk ID,
+    // 4. Resolve Slack user → Sales Agent user (agentUserId is the Supabase Auth user ID,
     //    organizationId is the internal org UUID).
     const userMapping = await resolveSlackUser(workspace.id, slackUserId);
     if (!userMapping) {

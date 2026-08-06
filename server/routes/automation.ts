@@ -8,7 +8,7 @@
  */
 
 import { Router, Response } from "express";
-import { getAuth, requireAuth } from "@clerk/express";
+import { getAuth, requireAuth } from "../lib/auth";
 import { isOrgAdmin } from "../lib/auth";
 import { getSupabaseAdmin } from "../lib/supabase";
 import { resolveInternalOrgId } from "../lib/org-resolver";
@@ -19,14 +19,14 @@ import { workflow } from "../workflows/client";
 import type { Request } from "../types";
 
 // ---------------------------------------------------------------------------
-// Clerk-first variant — used for Attio/Salesforce integration checks so the
+// active-organization-first variant — used for Attio/Salesforce integration checks so the
 // Activity page sidebar matches the Profile -> Integrations page.
 //
 // Now unified with resolveInternalOrgId since both use the same 2-tier
-// resolution: (1) Clerk session org, (2) organization_users membership.
+// resolution: (1) Supabase Auth session org, (2) organization_users membership.
 // Kept as a separate function for call-site clarity.
 // ---------------------------------------------------------------------------
-async function resolveOrgIdClerkFirst(
+async function resolveCredentialOrgId(
   ...args: Parameters<typeof resolveInternalOrgId>
 ): Promise<string | null> {
   return resolveInternalOrgId(...args);
@@ -47,15 +47,15 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
 
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -93,10 +93,10 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
       const { dealId } = req.params;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -106,7 +106,7 @@ router.get(
       }
 
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -182,15 +182,15 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
 
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -239,7 +239,7 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
 
       if (!userId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
@@ -249,8 +249,8 @@ router.get(
       const supabase = getSupabaseAdmin();
 
       // Resolve org for isolation (reminders are org-scoped)
-      const resolvedOrgId = clerkOrgId
-        ? await resolveInternalOrgId(supabase, userId, clerkOrgId)
+      const resolvedOrgId = activeOrgId
+        ? await resolveInternalOrgId(supabase, userId, activeOrgId)
         : null;
 
       let query = supabase
@@ -294,7 +294,7 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
 
       if (!userId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
@@ -305,12 +305,12 @@ router.get(
       // Two orgs because different integrations use different tier orders:
       // - resolvedOrgId (profile-first): matches where data lives, used by Slack
       //   (oauth_connections) — same pattern as useIntegrationStatuses hook.
-      // - credentialOrgId (clerk-first): matches the canonical
+      // - credentialOrgId (active-organization-first): matches the canonical
       //   /oauth/attio/status and /salesforce/oauth/status endpoints, used by
       //   Attio and Salesforce credential checks.
       const [resolvedOrgId, credentialOrgId] = await Promise.all([
-        resolveInternalOrgId(supabase, userId, clerkOrgId),
-        resolveOrgIdClerkFirst(supabase, userId, clerkOrgId),
+        resolveInternalOrgId(supabase, userId, activeOrgId),
+        resolveCredentialOrgId(supabase, userId, activeOrgId),
       ]);
 
       // Each check is wrapped in an async function with try/catch because
@@ -369,7 +369,7 @@ router.get(
       // Salesforce: match the canonical check in routes/salesforce.ts:536
       // — `connected: creds.sync_status === 'active'`. A row can exist but be
       // marked disconnected/error; only treat "active" as connected.
-      // Uses credentialOrgId (clerk-first) to match the canonical
+      // Uses credentialOrgId (active-organization-first) to match the canonical
       // /api/salesforce/oauth/status endpoint behavior.
       const checkSalesforce = async (): Promise<boolean> => {
         if (!credentialOrgId) return false;
@@ -388,7 +388,7 @@ router.get(
 
       // Attio: match the canonical check in routes/oauth.ts:2281
       // — `connected: !!data && data.status === "active"`.
-      // Uses credentialOrgId (clerk-first) to match the canonical
+      // Uses credentialOrgId (active-organization-first) to match the canonical
       // /api/oauth/attio/status endpoint behavior.
       const checkAttio = async (): Promise<boolean> => {
         if (!credentialOrgId) return false;
@@ -447,7 +447,7 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
 
       if (!userId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
@@ -455,14 +455,14 @@ router.get(
       }
 
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
 
       // Fail-closed: if we can't resolve an org, return empty rather than
       // dropping the org_id filter (preserves the security intent of
       // commit bb8baba — never leak cross-org learnings).
       if (!resolvedOrgId) {
         req.log.warn(
-          { userId, clerkOrgId: clerkOrgId ?? null },
+          { userId, activeOrgId: activeOrgId ?? null },
           "Could not resolve org for learnings; returning empty",
         );
         res.json({ success: true, data: [], requestId: req.id });
@@ -573,9 +573,9 @@ router.patch(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId, orgId: clerkOrgId, orgRole } = auth;
+      const { userId, orgId: activeOrgId, orgRole } = auth;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -592,7 +592,7 @@ router.patch(
       }
 
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -644,15 +644,15 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
 
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -726,10 +726,10 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
       const orgRole = auth.orgRole;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -741,7 +741,7 @@ router.get(
 
       // admin: cross-org aggregate counts require service role
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -827,10 +827,10 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
       const orgRole = auth.orgRole;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -842,7 +842,7 @@ router.get(
 
       // admin: org-wide pipeline listing requires service role
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -887,10 +887,10 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
       const orgRole = auth.orgRole;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -902,7 +902,7 @@ router.get(
 
       // admin: reading workspace tokens requires service role
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -984,10 +984,10 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
       const orgRole = auth.orgRole;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -999,7 +999,7 @@ router.get(
 
       // admin: reading org settings requires service role
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -1033,10 +1033,10 @@ router.put(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
       const orgRole = auth.orgRole;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -1060,7 +1060,7 @@ router.put(
 
       // admin: updating org settings requires service role
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -1103,9 +1103,9 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId, orgId: clerkOrgId, orgRole } = auth;
+      const { userId, orgId: activeOrgId, orgRole } = auth;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -1116,7 +1116,7 @@ router.get(
       }
 
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -1177,9 +1177,9 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId: authUserId, orgId: clerkOrgId, orgRole } = auth;
+      const { userId: authUserId, orgId: activeOrgId, orgRole } = auth;
 
-      if (!authUserId || !clerkOrgId) {
+      if (!authUserId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -1196,7 +1196,7 @@ router.put(
       }
 
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, authUserId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, authUserId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -1314,9 +1314,9 @@ router.delete(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId, orgId: clerkOrgId, orgRole } = auth;
+      const { userId, orgId: activeOrgId, orgRole } = auth;
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -1327,7 +1327,7 @@ router.delete(
       }
 
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -1380,10 +1380,10 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
       const range = (req.query.range as string) || "24h";
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -1398,7 +1398,7 @@ router.get(
       }
 
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;
@@ -1501,11 +1501,11 @@ router.get(
     try {
       const auth = getAuth(req);
       const userId = auth.userId;
-      const clerkOrgId = auth.orgId;
+      const activeOrgId = auth.orgId;
       const { id } = req.params;
       const source = (req.query.source as string) || "draft";
 
-      if (!userId || !clerkOrgId) {
+      if (!userId || !activeOrgId) {
         res.status(401).json({ success: false, error: "Unauthorized", requestId: req.id });
         return;
       }
@@ -1521,7 +1521,7 @@ router.get(
       }
 
       const supabase = getSupabaseAdmin();
-      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, clerkOrgId);
+      const resolvedOrgId = await resolveInternalOrgId(supabase, userId, activeOrgId);
       if (!resolvedOrgId) {
         res.status(400).json({ success: false, error: "No organization found", requestId: req.id });
         return;

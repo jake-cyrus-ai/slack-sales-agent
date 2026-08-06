@@ -1,13 +1,8 @@
 /**
  * Shared organization ID resolver for Express routes.
  *
- * Resolves the internal Supabase organization UUID from a Clerk session.
- * Clerk's `auth.orgId` returns a Clerk-assigned ID (e.g. "org_2xxx"),
- * NOT a Supabase UUID. This resolver maps it to the internal UUID.
- *
- * Resolution tiers:
- *   1. Clerk session org (clerkOrgId -> organizations.clerk_id -> id)
- *   2. Oldest org membership from organization_users
+ * Resolves the active internal organization UUID from the validated Supabase
+ * Auth context, falling back to the user's oldest membership.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -15,16 +10,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export async function resolveInternalOrgId(
   supabase: SupabaseClient,
   userId: string,
-  clerkOrgId: string | null | undefined,
+  activeOrgId: string | null | undefined,
 ): Promise<string | null> {
-  if (clerkOrgId) {
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("id")
-      .eq("clerk_id", clerkOrgId)
-      .maybeSingle();
-    if (org?.id) return org.id;
-  }
+  if (activeOrgId) return activeOrgId;
 
   // Tier 2: organization_users membership
   const { data: membership } = await supabase

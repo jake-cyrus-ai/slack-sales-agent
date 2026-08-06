@@ -56,9 +56,9 @@ const userMappingCache = new Map<string, UserMappingCacheEntry>();
 /**
  * Helper: Link Slack user to Sales Agent account.
  *
- * POST-MIGRATION: Returns the Clerk user ID (TEXT) and organization context
+ * POST-MIGRATION: Returns the Supabase Auth user ID (TEXT) and organization context
  * from the slack_user_mappings table. The agent_user_id stored in the mapping
- * is now the Clerk user ID directly.
+ * is now the Supabase Auth user ID directly.
  *
  * Results are cached for 5 minutes (direct lookups only, not auto-link).
  */
@@ -285,9 +285,9 @@ async function linkSlackUserToAgent(
 /**
  * Helper: Check org-level permissions for a user.
  *
- * POST-MIGRATION: Looks up the user's role in organization_users using Clerk IDs.
- * The organization_users table is synced from Clerk via webhooks, and user_id is
- * now the Clerk ID directly (TEXT).
+ * POST-MIGRATION: Looks up the user's role in organization_users using Supabase Auth user IDs.
+ * The organization_users table is validated through Supabase Auth and tenant memberships, and user_id is
+ * now the Supabase Auth user ID directly (TEXT).
  */
 async function checkOrgPermission(
   supabase: any,

@@ -1,95 +1,96 @@
-/**
- * Server-side Clerk role helpers and Express middlewares.
- *
- * Mirrors the frontend mapping in src/hooks/useUserRole.ts so the two sides
- * agree on "admin" vs "member" for the same session.
- */
-
-import type { Response, NextFunction } from "express";
-import { getAuth } from "@clerk/express";
+import type { NextFunction, Response } from "express";
+import type { User } from "@supabase/supabase-js";
 import type { Request } from "../types";
+import { getSupabaseAdmin } from "../workflows/utils/supabase";
 
-/** Maps a Clerk org role string to our app-level org role. */
-export const mapClerkOrgRole = (
-  clerkRole: string | null | undefined
-): "admin" | "member" | null => {
-  if (!clerkRole) return null;
-  if (clerkRole === "org:admin" || clerkRole === "org:platform_admin") return "admin";
-  if (clerkRole === "org:member" || clerkRole === "basic_member" || clerkRole === "member")
-    return "member";
-  return null;
+export type AuthContext = {
+  userId: string | null;
+  orgId: string | null;
+  orgRole: string | null;
+  orgSlug: string | null;
+  sessionId: string | null;
+  sessionClaims: Record<string, unknown> | null;
+  user: User | null;
+  token: string | null;
 };
 
-/**
- * Returns true if the Clerk orgRole indicates an org admin.
- * Use this to gate admin-only operations (doc upload, invites, etc.).
- */
-export const isOrgAdmin = (
-  orgRole: string | null | undefined
-): boolean => {
-  const mapped = mapClerkOrgRole(orgRole);
-  return mapped === "admin";
+const anonymousContext = (): AuthContext => ({
+  userId: null,
+  orgId: null,
+  orgRole: null,
+  orgSlug: null,
+  sessionId: null,
+  sessionClaims: null,
+  user: null,
+  token: null,
+});
+
+export const getAuth = (req: Request): AuthContext => req.auth ?? anonymousContext();
+
+/** Resolve and validate a Supabase bearer session and optional active organization. */
+export async function supabaseAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
+  req.auth = anonymousContext();
+  const authorization = req.header("authorization");
+  if (!authorization?.startsWith("Bearer ")) return next();
+  const token = authorization.slice(7).trim();
+  if (!token) return next();
+
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data.user) return next();
+
+    const requestedOrgId = req.header("x-organization-id")?.trim() || null;
+    let membershipQuery = supabase
+      .from("organization_users")
+      .select("organization_id, role, organizations!inner(slug)")
+      .eq("user_id", data.user.id);
+    if (requestedOrgId) membershipQuery = membershipQuery.eq("organization_id", requestedOrgId);
+    const { data: membership } = await membershipQuery
+      .order("joined_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    const claims = data.user.app_metadata ?? {};
+    req.auth = {
+      userId: data.user.id,
+      orgId: membership?.organization_id ?? null,
+      orgRole: membership?.role ?? null,
+      orgSlug: (membership?.organizations as unknown as { slug?: string } | null)?.slug ?? null,
+      sessionId: typeof claims.session_id === "string" ? claims.session_id : null,
+      sessionClaims: claims,
+      user: data.user,
+      token,
+    };
+  } catch (error) {
+    req.log?.warn({ err: error }, "Supabase authentication failed");
+  }
+  next();
+}
+
+export const requireAuth = () => (req: Request, res: Response, next: NextFunction) => {
+  if (!getAuth(req).userId) {
+    return res.status(401).json({ error: "Unauthorized", requestId: req.id });
+  }
+  next();
 };
 
-/**
- * Returns true if the Clerk JWT session represents a Slack Sales Agent platform admin
- * or staff member, regardless of which org is currently active. Reads from
- * `sessionClaims.public_metadata.platformRole`.
- *
- * REQUIRES the Clerk Session Token template to include `public_metadata`
- * (i.e. `"public_metadata": "{{user.public_metadata}}"`). If the claim is
- * absent, this fails closed and the caller falls through to the standard
- * org-role check.
- */
-export const isPlatformAdmin = (
-  sessionClaims: Record<string, unknown> | null | undefined,
-): boolean => {
-  if (!sessionClaims) return false;
-  const meta =
-    (sessionClaims as { public_metadata?: unknown }).public_metadata ??
-    (sessionClaims as { publicMetadata?: unknown }).publicMetadata ??
-    null;
-  if (!meta || typeof meta !== "object") return false;
-  const role = (meta as { platformRole?: unknown }).platformRole;
+export const isOrgAdmin = (role: string | null | undefined): boolean =>
+  role === "owner" || role === "admin" || role === "org:owner" || role === "org:admin";
+
+export const isPlatformAdmin = (claims: Record<string, unknown> | null | undefined): boolean => {
+  const role = claims?.platform_role ?? claims?.platformRole;
   return role === "platform_admin" || role === "platform_staff";
 };
 
-/**
- * The union of "can manage this org's resources":
- *   - Standard Clerk org admins (per `auth.orgRole`), OR
- *   - Slack Sales Agent platform admins / staff (per `publicMetadata.platformRole`),
- *     who can manage on behalf of any customer org they've been added to.
- *
- * Use this in route gates instead of `isOrgAdmin(auth.orgRole)` when you want
- * platform staff to be able to act in customer orgs they've joined.
- */
-export const canManageOrg = (auth: {
-  orgRole?: string | null;
-  sessionClaims?: Record<string, unknown> | null;
-}): boolean => {
-  if (isOrgAdmin(auth.orgRole)) return true;
-  if (isPlatformAdmin(auth.sessionClaims ?? null)) return true;
-  return false;
-};
+export const canManageOrg = (auth: Pick<AuthContext, "orgRole" | "sessionClaims">): boolean =>
+  isOrgAdmin(auth.orgRole) || isPlatformAdmin(auth.sessionClaims);
 
-/**
- * Middleware: require an authenticated Clerk session with org-admin role
- * in the active org. Returns 401 when not signed in, 403 when not admin.
- */
-export const requireOrgAdmin = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  const { userId, orgRole } = getAuth(req);
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized", requestId: req.id });
-  }
-  if (!isOrgAdmin(orgRole)) {
-    return res.status(403).json({
-      error: "Forbidden: org admin required",
-      requestId: req.id,
-    });
+export const requireOrgAdmin = (req: Request, res: Response, next: NextFunction) => {
+  const auth = getAuth(req);
+  if (!auth.userId) return res.status(401).json({ error: "Unauthorized", requestId: req.id });
+  if (!isOrgAdmin(auth.orgRole)) {
+    return res.status(403).json({ error: "Forbidden: org admin required", requestId: req.id });
   }
   next();
 };

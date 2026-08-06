@@ -1,13 +1,14 @@
 /**
  * Protected User API Routes
  *
- * These routes require Clerk authentication via requireAuth().
+ * These routes require a verified Supabase Auth session.
  * They provide the frontend with the authenticated user's context
  * (userId, orgId, orgRole) without needing extra DB queries.
  */
 
 import { Router, Response } from "express";
-import { getAuth, requireAuth, clerkClient } from "@clerk/express";
+import crypto from "node:crypto";
+import { getAuth, requireAuth } from "../lib/auth";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Request } from "../types";
@@ -36,8 +37,7 @@ const router = Router();
 /**
  * GET /api/user
  *
- * Returns the authenticated user's Clerk auth context.
- * Requires a valid Clerk session (JWT in Authorization header).
+ * Returns the authenticated user's Supabase auth and organization context.
  *
  * Response:
  *   { userId, orgId, orgRole, orgSlug, sessionId }
@@ -79,8 +79,7 @@ router.get(
 /**
  * GET /api/user/profile
  *
- * Returns the authenticated user's profile from Supabase (synced via Clerk webhooks).
- * Requires a valid Clerk session.
+ * Returns the authenticated user's profile from Supabase.
  *
  * Response:
  *   { id, email, first_name, last_name, avatar_url, ... }
@@ -140,7 +139,7 @@ router.get(
  * GET /api/user/organization
  *
  * Returns the authenticated user's active organization details and membership.
- * Requires a valid Clerk session with an active organization.
+ * Uses the validated active organization from the request header or first membership.
  *
  * Response:
  *   { organization: { id, name, slug, ... }, membership: { role, ... } }
@@ -168,11 +167,11 @@ router.get(
 
       const supabase = getSupabaseAdmin();
 
-      // Fetch the organization from Supabase (synced via Clerk webhooks)
+      // orgId is already an internal UUID validated by the auth middleware.
       const { data: organization, error: orgError } = await supabase
         .from("organizations")
         .select("*")
-        .eq("clerk_id", orgId)
+        .eq("id", orgId)
         .single();
 
       if (orgError || !organization) {
@@ -216,7 +215,7 @@ router.get(
 // User/profile writes
 //
 // These migrate browser → Supabase writes behind Express. Every route is
-// gated by requireAuth() and derives the Clerk user id from getAuth(req) — a
+// gated by requireAuth() and derives the Supabase user id from getAuth(req) — a
 // client-supplied user id is NEVER trusted. Each route uses a user-scoped
 // Supabase client (getSupabaseForRequest) so RLS (`user_id = current_user_id()`)
 // enforces the user boundary at the database in addition to the explicit
@@ -255,16 +254,56 @@ const markNotificationsReadSchema = z.object({
   channel: z.string().min(1, "channel is required"),
 });
 
+const createOrganizationSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+});
+
+router.get("/user/organizations", requireAuth(), async (req: Request, res: Response) => {
+  const { userId } = getAuth(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized", requestId: req.id });
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("organization_users")
+    .select("role, joined_at, organizations!inner(id, name, slug)")
+    .eq("user_id", userId)
+    .order("joined_at", { ascending: true });
+  if (error) return res.status(500).json({ error: error.message, requestId: req.id });
+  return res.json({ organizations: data ?? [], requestId: req.id });
+});
+
+router.post("/user/organizations", requireAuth(), async (req: Request, res: Response) => {
+  const body = validateBody(createOrganizationSchema, req, res);
+  if (!body) return;
+  const { userId } = getAuth(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized", requestId: req.id });
+  const supabase = getSupabaseAdmin();
+  const slugBase = body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "organization";
+  const slug = `${slugBase}-${crypto.randomUUID().slice(0, 8)}`;
+  const { data: organization, error: orgError } = await supabase
+    .from("organizations")
+    .insert({ name: body.name, slug, owner_user_id: userId })
+    .select("id, name, slug")
+    .single();
+  if (orgError || !organization) {
+    return res.status(500).json({ error: orgError?.message ?? "Could not create organization", requestId: req.id });
+  }
+  const { error: memberError } = await supabase.from("organization_users").insert({
+    organization_id: organization.id,
+    user_id: userId,
+    role: "owner",
+  });
+  if (memberError) {
+    await supabase.from("organizations").delete().eq("id", organization.id);
+    return res.status(500).json({ error: memberError.message, requestId: req.id });
+  }
+  return res.status(201).json({ organization, role: "owner", requestId: req.id });
+});
+
 /**
  * POST /api/user/ensure-profile
  *
- * Upserts a minimal profile for the authenticated caller. Covers the Clerk
- * `user.created` webhook race where a user may reach the app before their
- * profile row exists. Idempotent — onConflict on user_id.
- *
- * Profile fields are derived from the Clerk user object server-side; the
- * optional body (email/firstName/lastName) is only used as a fallback when
- * Clerk does not surface them.
+ * Upserts a minimal profile for the authenticated Supabase user. Idempotent on
+ * `user_id`; identity fields come from the verified Auth user, not the client.
  */
 router.post(
   "/user/ensure-profile",
@@ -274,7 +313,7 @@ router.post(
     if (!body) return;
 
     try {
-      const { userId } = getAuth(req);
+      const { userId, user } = getAuth(req);
       if (!userId) {
         return res.status(401).json({
           error: "Unauthorized - No user ID in session",
@@ -282,29 +321,8 @@ router.post(
         });
       }
 
-      // Pull canonical fields from Clerk; fall back to the optional body.
-      let clerkEmail: string | undefined;
-      let clerkFirstName: string | null = null;
-      let clerkLastName: string | null = null;
-      let clerkAvatarUrl: string | null = null;
-      let clerkCreatedAt: string | null = null;
-      try {
-        const clerkUser = await clerkClient.users.getUser(userId);
-        clerkEmail =
-          clerkUser.primaryEmailAddress?.emailAddress ??
-          clerkUser.emailAddresses?.[0]?.emailAddress ??
-          undefined;
-        clerkFirstName = clerkUser.firstName ?? null;
-        clerkLastName = clerkUser.lastName ?? null;
-        clerkAvatarUrl = clerkUser.imageUrl ?? null;
-        clerkCreatedAt = clerkUser.createdAt
-          ? new Date(clerkUser.createdAt).toISOString()
-          : null;
-      } catch (clerkErr) {
-        req.log.warn({ err: clerkErr, userId }, "Could not load Clerk user for ensure-profile");
-      }
-
-      const email = clerkEmail || body.email;
+      const metadata = user?.user_metadata ?? {};
+      const email = user?.email || body.email;
       if (!email) {
         return res.status(400).json({
           error: "No email address available for profile creation",
@@ -339,10 +357,10 @@ router.post(
         {
           user_id: userId,
           email,
-          first_name: clerkFirstName ?? body.firstName ?? null,
-          last_name: clerkLastName ?? body.lastName ?? null,
-          avatar_url: clerkAvatarUrl,
-          created_at: clerkCreatedAt || now,
+          first_name: typeof metadata.first_name === "string" ? metadata.first_name : body.firstName ?? null,
+          last_name: typeof metadata.last_name === "string" ? metadata.last_name : body.lastName ?? null,
+          avatar_url: typeof metadata.avatar_url === "string" ? metadata.avatar_url : null,
+          created_at: user?.created_at || now,
           updated_at: now,
         },
         { onConflict: "user_id" }

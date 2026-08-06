@@ -3,7 +3,7 @@
  */
 
 import { Router, Response } from "express";
-import { getAuth, requireAuth } from "@clerk/express";
+import { getAuth, requireAuth } from "../lib/auth";
 
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";

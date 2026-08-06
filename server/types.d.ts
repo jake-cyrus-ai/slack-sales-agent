@@ -4,6 +4,7 @@
 
 import type { Request as ExpressRequest } from "express";
 import type { Logger } from "pino";
+import type { AuthContext } from "./lib/auth";
 
 declare global {
   namespace Express {
@@ -13,6 +14,7 @@ declare global {
       log: Logger; // Injected by pino-http
       organizationId?: string;
       widgetKeyId?: string;
+      auth?: AuthContext;
     }
   }
 }

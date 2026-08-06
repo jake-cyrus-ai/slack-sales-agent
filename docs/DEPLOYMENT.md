@@ -1,12 +1,12 @@
 # Bring-your-own-keys deployment
 
-The reference deployment runs the web UI, Express API, Slack webhooks, OAuth callbacks, schedules, and durable workflows on Vercel. Supabase provides Postgres and storage; Clerk secures the configuration UI. Slack remains the product interface.
+The reference deployment runs the web UI, Express API, Slack webhooks, OAuth callbacks, schedules, and durable workflows on Vercel. Supabase provides Postgres, Auth, and storage. Slack remains the product interface.
 
 ## Requirements
 
 - Node.js 22 and pnpm 10
 - a Vercel project on Pro or higher (the included frequent cron schedules and extended function duration exceed Hobby limits)
-- Supabase and Clerk projects
+- a Supabase project with email/password authentication enabled
 - a Slack app created from `examples/slack-app-manifest.example.json`
 - Anthropic and OpenAI API keys
 - optional Google and Salesforce OAuth applications
@@ -28,17 +28,11 @@ The bootstrap stores an encrypted installation secret, creates the private docum
 
 ## Authentication
 
-Enable Organizations in Clerk. In Supabase Authentication > Third-Party Auth, add Clerk and configure the Clerk session token with `role: "authenticated"`. Send Clerk organization, membership, and user create/update/delete webhooks to:
-
-```text
-https://YOUR_DOMAIN/api/webhooks/clerk
-```
-
-Set the endpoint's signing secret as `CLERK_WEBHOOK_SIGNING_SECRET`.
+Enable email/password authentication in Supabase Authentication > Providers. Set the Supabase Site URL to `FRONTEND_URL` and add the same deployed origin and any local/tunnel origins under Redirect URLs. The browser uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`; the service-role key remains server-only. Users create and select organizations in the configuration UI, and every selected organization is validated against `organization_users` before a request receives tenant context.
 
 ## Vercel
 
-Import the repository into Vercel, leave the build settings from `vercel.json` in place, and add the server-side variables documented in `.env.example`. At minimum, production requires Slack, Supabase, Clerk, model, credential-encryption, workflow, and `CRON_SECRET` configuration.
+Import the repository into Vercel, leave the build settings from `vercel.json` in place, and add the variables documented in `.env.example`. At minimum, production requires Slack, Supabase, model, credential-encryption, workflow, and `CRON_SECRET` configuration. `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are public build-time values; never expose the service-role key.
 
 Validate the same values locally before deploying:
 

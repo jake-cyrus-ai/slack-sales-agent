@@ -29,8 +29,7 @@ import {
   validateGmailPayload,
   validateSlackPayload,
 } from "./webhookVerification";
-import { clerkWebhookRouter } from "./webhooks/clerk";
-import { clerkMiddleware } from "@clerk/express";
+import { supabaseAuthMiddleware } from "./lib/auth";
 import { logger } from "./lib/logger";
 import styleExamplesRouter from "./routes/style-examples";
 import userRouter from "./routes/user";
@@ -43,7 +42,6 @@ import automationRouter from "./routes/automation";
 import featureFlagsRouter from "./routes/feature-flags";
 import onboardingRouter from "./routes/onboarding";
 import feedbackRouter from "./routes/feedback";
-import { checkMigrationFlagsAtStartup, logMigrationConfig } from "./lib/featureFlags";
 import { supabase } from './src/lib/supabase';
 import './src/config';
 
@@ -74,18 +72,6 @@ async function dispatchWorkflowEventSafe(
 // Trust the first proxy (Render, Railway, etc.) so X-Forwarded-For is used
 // correctly by express-rate-limit and req.ip reflects the real client IP.
 app.set("trust proxy", 1);
-
-// ============================================================================
-// Feature Flag Validation
-// ============================================================================
-
-// Validate Clerk migration feature flags at startup
-try {
-  checkMigrationFlagsAtStartup();
-} catch (error) {
-  logger.error("Failed to start server due to invalid feature flags");
-  process.exit(1);
-}
 
 // Require the legacy Supabase signing secret used for worker-scoped RLS tokens.
 if (process.env.NODE_ENV === "production") {
@@ -132,7 +118,7 @@ app.use(
 
 // Body parsing middleware with size limits
 // The `verify` callback captures the raw body for webhook signature verification
-// (Clerk/svix and Slack require the exact original bytes to validate signatures).
+// (Slack and provider webhooks require the exact original bytes to validate signatures).
 app.use(express.json({
   limit: '1mb',
   verify: (req: any, _res, buf) => {
@@ -176,9 +162,9 @@ app.use(
   })
 );
 
-// Clerk authentication middleware is applied per-route below (not globally)
+// Supabase Authentication middleware is applied per-route below (not globally)
 // so that Vercel Workflow, health-check, and webhook routes are never blocked by
-// missing Clerk keys or unauthenticated requests.
+// missing Supabase configuration or unauthenticated requests.
 
 // Rate limiting for webhook endpoints
 const webhookLimiter = rateLimit({
@@ -241,7 +227,8 @@ app.get("/health", (req: Request, res: Response) => {
 // clients belong here; this keeps one Docker image portable across deployments.
 app.get("/api/config", (_req: Request, res: Response) => {
   res.json({
-    clerkPublishableKey: process.env.VITE_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY || null,
+    supabaseUrl: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || null,
+    supabasePublishableKey: process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || null,
   });
 });
 
@@ -523,41 +510,24 @@ app.post(
 );
 
 // ============================================================================
-// Clerk Webhook Endpoint
+// OAuth Callback Endpoints (No bearer session - uses oauth_states for CSRF)
 // ============================================================================
 
-app.use("/api/webhooks/clerk", webhookLimiter, clerkWebhookRouter);
-
-// ============================================================================
-// OAuth Callback Endpoints (No Clerk Auth - uses oauth_states for CSRF)
-// ============================================================================
-
-// OAuth callback endpoints are redirect endpoints that don't have Clerk session.
+// OAuth callback endpoints don't have a browser session.
 // They validate requests using stored state tables instead.
 app.get("/api/oauth/slack/callback", apiLimiter, oauthRouter);
 app.get("/api/oauth/granola/callback", apiLimiter, oauthRouter);
 app.get("/api/oauth/attio/callback", apiLimiter, oauthRouter);
 
 // ============================================================================
-// Protected API Routes (require Clerk authentication)
+// Protected API Routes (require Supabase authentication)
 // ============================================================================
 
-// Apply shared middleware once for all protected /api routes.
-// Wrap clerkMiddleware so auth failures surface as 401s in route handlers
-// (via getAuth()) instead of crashing the middleware chain with a 500.
-app.use("/api", apiLimiter, (req: Request, res: Response, next: NextFunction) => {
-  const clerk = clerkMiddleware();
-  clerk(req, res, (err?: any) => {
-    if (err) {
-      req.log.error({ err: err.message || err }, "clerkMiddleware error");
-      // Let the request continue — route handlers will see userId=null from getAuth()
-      // and return 401 themselves.
-    }
-    next();
-  });
-});
+// Optional auth parsing happens once; individual routes fail closed with
+// requireAuth(). OAuth callbacks remain protected by their one-time state.
+app.use("/api", apiLimiter, supabaseAuthMiddleware);
 
-// OAuth routes (Google endpoints require Clerk auth)
+// OAuth routes (Google endpoints require Supabase Auth)
 app.use("/api", oauthRouter);
 
 // Standard routes
@@ -828,11 +798,6 @@ if (!isTestEnv && !process.env.VERCEL) {
       },
       "Server started"
     );
-
-    // Log Clerk migration configuration if enabled
-    if (process.env.CLERK_MIGRATION_ENABLED === 'true') {
-      logMigrationConfig();
-    }
 
   });
 

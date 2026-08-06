@@ -4,7 +4,7 @@
  * Migrates the frontend's direct Supabase `set_feature_flag` /
  * `set_org_feature_flag` RPC calls behind Express. The browser previously
  * invoked these RPCs directly, which let it pass an arbitrary `p_user_id` —
- * these routes always derive the user id from the authenticated Clerk
+ * these routes always derive the user id from the authenticated Supabase Auth
  * session instead.
  *
  *   - PUT /api/feature-flags/user — per-user profile feature flags
@@ -12,7 +12,7 @@
  */
 
 import { Router, Response } from "express";
-import { getAuth, requireAuth } from "@clerk/express";
+import { getAuth, requireAuth } from "../lib/auth";
 import { z } from "zod";
 import { isOrgAdmin } from "../lib/auth";
 import { getSupabaseForRequest, getSupabaseAdmin } from "../lib/supabase";
@@ -39,7 +39,7 @@ const orgFlagSchema = z.object({
 /**
  * Authorize the caller to act on the internal `orgId`. Returns `null` on
  * success, or an `{ status, error }` rejection. Mirrors the same-named
- * The caller's active Clerk org must resolve to `orgId` and carry org-admin role.
+ * The caller's active organization must resolve to `orgId` and carry org-admin role.
  */
 type AuthzRejection = { status: number; error: string };
 
@@ -47,15 +47,15 @@ const authorizeOrgAction = async (
   req: Request,
   orgId: string
 ): Promise<AuthzRejection | null> => {
-  const { userId, orgRole, orgId: clerkOrgId } = getAuth(req);
+  const { userId, orgRole, orgId: activeOrgId } = getAuth(req);
   if (!userId) return { status: 401, error: "Unauthorized" };
   if (!isOrgAdmin(orgRole)) return { status: 403, error: "Forbidden: org admin required" };
-  if (!clerkOrgId) return { status: 403, error: "Organization context required" };
+  if (!activeOrgId) return { status: 403, error: "Organization context required" };
 
-  // admin client: resolving a Clerk org the caller may not yet be a member
+  // admin client: resolving an organization the caller may not yet be a member
   // of via RLS — the org-admin gate above is the authorization boundary.
   const supabase = getSupabaseAdmin();
-  const callerOrgId = await resolveOrgId(supabase, clerkOrgId, req.log);
+  const callerOrgId = await resolveOrgId(supabase, activeOrgId, req.log);
   if (!callerOrgId) return { status: 404, error: "Caller organization not found" };
   if (callerOrgId !== orgId) {
     return { status: 403, error: "Can only act on your own organization" };

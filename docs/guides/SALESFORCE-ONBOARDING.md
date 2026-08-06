@@ -45,7 +45,7 @@ the app integrates with Salesforce to read and write CRM data (accounts, opportu
 
 - **Salesforce Edition:** Enterprise, Unlimited, Developer, or Performance (API access required — Essentials and Professional do not include API access by default)
 - **Admin Access:** The person authorizing the connection must be a Salesforce administrator (or have the "Manage Connected Apps" permission)
-- **the app Org Membership:** The customer must have an organization in the app, and the person connecting must be an org admin or owner (Clerk role: `org:admin` or `org:owner`)
+- **App organization membership:** The customer must have an organization in the app, and the person connecting must have the `admin` or `owner` membership role
 
 ---
 
@@ -75,7 +75,7 @@ Nothing — they just need to click "Connect Salesforce" and authorize.
 
 1. The customer's org admin navigates to Settings in the the app UI
 2. Clicks "Connect Salesforce"
-3. The frontend calls: `GET /api/salesforce/oauth/connect` (with Clerk auth headers)
+3. The frontend calls the Salesforce OAuth initiation endpoint with its Supabase access token and active organization header
 4. The server generates a PKCE code challenge + random state, stores it in `salesforce_oauth_pending`, and redirects the user to:
    ```
    https://login.salesforce.com/services/oauth2/authorize
@@ -262,7 +262,8 @@ If a customer reports that certain tools aren't working, check their Salesforce 
 ### 1. Check connection status via API
 
 ```bash
-curl -H "Authorization: Bearer {clerk_jwt}" \
+curl -H "Authorization: Bearer {supabase_access_token}" \
+  -H "X-Organization-ID: {organization_uuid}" \
   "https://sales-agent.example.com/api/salesforce/oauth/status"
 ```
 
@@ -302,7 +303,8 @@ Check that:
 
 ```bash
 curl -X POST "https://sales-agent.example.com/api/salesforce/query" \
-  -H "Authorization: Bearer {clerk_jwt}" \
+  -H "Authorization: Bearer {supabase_access_token}" \
+  -H "X-Organization-ID: {organization_uuid}" \
   -H "Content-Type: application/json" \
   -d '{"query": "List 3 accounts in Salesforce"}'
 ```
@@ -435,7 +437,8 @@ No trailing slash. Protocol must match (https vs http).
 
 ```bash
 curl -X POST "https://sales-agent.example.com/api/salesforce/oauth/disconnect" \
-  -H "Authorization: Bearer {clerk_jwt}"
+  -H "Authorization: Bearer {supabase_access_token}" \
+  -H "X-Organization-ID: {organization_uuid}"
 ```
 
 This will:

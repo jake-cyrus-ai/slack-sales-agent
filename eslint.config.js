@@ -52,7 +52,7 @@ export default tseslint.config(
     //
     // Covers:
     //   server/routes/**         — Express handlers dealing with external payloads
-    //   server/webhooks/**       — Raw webhook ingestion (Clerk, Stripe, etc.)
+    //   server/webhooks/**       — Raw webhook ingestion (Slack, provider events, etc.)
     //   server/index.ts          — Top-level server bootstrap
     //   server/webhookVerification.ts
     //   server/lib/**            — Server-side utility libs

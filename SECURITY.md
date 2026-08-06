@@ -11,7 +11,7 @@ This repository is deployable reference software, not a hosted service. Operator
 - Slack HMAC verification includes timestamp replay protection.
 - OAuth callbacks validate state; Attio and Granola use PKCE and constrain discovered endpoints to provider domains.
 - OAuth credentials are encrypted before database storage and must never enter model context, Slack responses, browser payloads, or logs.
-- Clerk protects onboarding/settings routes; organization membership and PostgreSQL RLS enforce tenant isolation.
+- Supabase Auth protects onboarding/settings routes; validated organization membership and PostgreSQL RLS enforce tenant isolation.
 - Consequential email and CRM actions are idempotent and audited. Approval is the default; autonomous email requires explicit organization configuration.
 - CORS, redirect destinations, webhook rate limits, and health endpoints are configurable.
 

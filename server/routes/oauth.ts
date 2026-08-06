@@ -20,7 +20,7 @@
  */
 
 import { Router, Response } from "express";
-import { getAuth, requireAuth } from "@clerk/express";
+import { getAuth, requireAuth } from "../lib/auth";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import type { Request } from "../types";
@@ -165,19 +165,19 @@ const REQUIRED_GOOGLE_SCOPE_GROUPS: string[][] = [
  * Resolves the user's internal organization UUID.
  *
  * Priority:
- *  1. Clerk session's active org (clerkOrgId → organizations.clerk_id → id)
+ *  1. Authenticated request's active internal organization ID
  *  2. Oldest org membership from organization_users
  */
 const resolveOrganizationId = async (
   supabase: SupabaseClient,
   userId: string,
-  clerkOrgId: string | null | undefined
+  activeOrganizationId: string | null | undefined
 ): Promise<string | null> => {
-  if (clerkOrgId) {
+  if (activeOrganizationId) {
     const { data: org } = await supabase
       .from("organizations")
       .select("id")
-      .eq("clerk_id", clerkOrgId)
+      .eq("id", activeOrganizationId)
       .single();
 
     if (org?.id) return org.id;
@@ -214,13 +214,13 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       let userId: string | null = null;
-      let clerkOrgId: string | null | undefined;
+      let activeOrgId: string | null | undefined;
       try {
         const auth = getAuth(req);
         userId = auth.userId;
-        clerkOrgId = auth.orgId;
+        activeOrgId = auth.orgId;
       } catch (authErr) {
-        req.log.error({ err: authErr }, "Clerk auth error on Google callback");
+        req.log.error({ err: authErr }, "Supabase Auth error on Google callback");
         return res.status(401).json({
           error: "Unauthorized - authentication failed",
           requestId: req.id,
@@ -256,8 +256,8 @@ router.post(
 
       const supabase = getSupabaseAdmin();
 
-      const organizationId = await resolveOrganizationId(supabase, userId, clerkOrgId);
-      req.log.info({ organizationId: organizationId || null, clerkOrgId: clerkOrgId || null }, "Organization context");
+      const organizationId = await resolveOrganizationId(supabase, userId, activeOrgId);
+      req.log.info({ organizationId: organizationId || null, activeOrgId: activeOrgId || null }, "Organization context");
 
       // Server-controlled redirect URI — never trust client input here. Google rejects
       // mismatches against the OAuth app's registered URIs anyway, but we still refuse
@@ -433,17 +433,17 @@ router.post(
   "/oauth/google/disconnect",
   async (req: Request, res: Response) => {
     try {
-      // Auth check — clerkMiddleware() already ran on the /api mount.
+      // Auth check — supabaseAuthMiddleware() already ran on the /api mount.
       // We do a safe getAuth() instead of requireAuth() middleware so that
       // errors surface as a clear 401 rather than a 500 from the middleware chain.
       let userId: string | null = null;
-      let clerkOrgId: string | null | undefined;
+      let activeOrgId: string | null | undefined;
       try {
         const auth = getAuth(req);
         userId = auth.userId;
-        clerkOrgId = auth.orgId;
+        activeOrgId = auth.orgId;
       } catch (authErr) {
-        req.log.error({ err: authErr }, "Clerk auth error on disconnect");
+        req.log.error({ err: authErr }, "Supabase Auth error on disconnect");
         return res.status(401).json({
           error: "Unauthorized - authentication failed",
           requestId: req.id,
@@ -461,8 +461,8 @@ router.post(
 
       const supabase = getSupabaseAdmin();
 
-      const organizationId = await resolveOrganizationId(supabase, userId, clerkOrgId);
-      req.log.info({ organizationId: organizationId || null, clerkOrgId: clerkOrgId || null }, "Organization context");
+      const organizationId = await resolveOrganizationId(supabase, userId, activeOrgId);
+      req.log.info({ organizationId: organizationId || null, activeOrgId: activeOrgId || null }, "Organization context");
 
       // Get calendar credentials to revoke token with Google
       let credQuery = supabase
@@ -536,7 +536,7 @@ router.post(
 // ---------------------------------------------------------------------------
 // POST /api/oauth/slack/initiate
 // Create OAuth state server-side (bypasses RLS) and return Slack auth URL
-// Requires Clerk authentication
+// Requires Supabase Authentication
 // ---------------------------------------------------------------------------
 
 router.post(
@@ -544,13 +544,13 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       let userId: string | null = null;
-      let clerkOrgId: string | null | undefined;
+      let activeOrgId: string | null | undefined;
       try {
         const auth = getAuth(req);
         userId = auth.userId;
-        clerkOrgId = auth.orgId;
+        activeOrgId = auth.orgId;
       } catch (authErr) {
-        req.log.error({ err: authErr }, "Clerk auth error on Slack initiate");
+        req.log.error({ err: authErr }, "Supabase Auth error on Slack initiate");
         return res.status(401).json({
           error: "Unauthorized - authentication failed",
           requestId: req.id,
@@ -594,7 +594,7 @@ router.post(
         organizationId = invite?.organization_id ?? null;
       }
       if (!organizationId) {
-        organizationId = await resolveOrganizationId(supabase, userId, clerkOrgId);
+        organizationId = await resolveOrganizationId(supabase, userId, activeOrgId);
       }
 
       if (!organizationId) {
@@ -1114,7 +1114,7 @@ function isGranolaUrl(url: string): boolean {
 // ---------------------------------------------------------------------------
 // POST /api/oauth/granola/initiate
 // Initiate Granola MCP OAuth 2.1 flow
-// Authenticated via Clerk Bearer token (cross-origin safe)
+// Authenticated via Supabase access token (cross-origin safe)
 // ---------------------------------------------------------------------------
 
 router.post(
@@ -1123,7 +1123,7 @@ router.post(
     try {
       const supabase = getSupabaseAdmin();
 
-      // 1. Authenticate via Clerk Bearer token
+      // 1. Authenticate via Supabase access token
       const auth = getAuth(req);
       const userId = auth.userId;
       if (!userId) {
@@ -1132,8 +1132,8 @@ router.post(
 
       req.log.info({ userId }, "Starting Granola OAuth");
 
-      const clerkOrgId = auth.orgId;
-      const orgId = await resolveOrganizationId(supabase, userId, clerkOrgId);
+      const activeOrgId = auth.orgId;
+      const orgId = await resolveOrganizationId(supabase, userId, activeOrgId);
 
       if (!orgId) {
         return res.status(400).json({ error: "no_organization", requestId: req.id });
@@ -1290,7 +1290,7 @@ router.post(
 // ---------------------------------------------------------------------------
 // GET /api/oauth/granola/callback
 // Handle Granola OAuth callback — exchange code for tokens and store credentials
-// No Clerk middleware — uses stored state for auth context
+// No Supabase Auth middleware — uses stored state for auth context
 // ---------------------------------------------------------------------------
 
 router.get(
@@ -1469,13 +1469,13 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       let userId: string | null = null;
-      let clerkOrgId: string | null | undefined;
+      let activeOrgId: string | null | undefined;
       try {
         const auth = getAuth(req);
         userId = auth.userId;
-        clerkOrgId = auth.orgId;
+        activeOrgId = auth.orgId;
       } catch (authErr) {
-        req.log.error({ err: authErr }, "Clerk auth error on Granola disconnect");
+        req.log.error({ err: authErr }, "Supabase Auth error on Granola disconnect");
         return res.status(401).json({
           error: "Unauthorized - authentication failed",
           requestId: req.id,
@@ -1493,8 +1493,8 @@ router.post(
 
       const supabase = getSupabaseAdmin();
 
-      const organizationId = await resolveOrganizationId(supabase, userId, clerkOrgId);
-      req.log.info({ organizationId: organizationId || null, clerkOrgId: clerkOrgId || null }, "Organization context");
+      const organizationId = await resolveOrganizationId(supabase, userId, activeOrgId);
+      req.log.info({ organizationId: organizationId || null, activeOrgId: activeOrgId || null }, "Organization context");
 
       // Attempt token revocation if revocation endpoint is configured
       const revocationUrl = process.env.GRANOLA_REVOCATION_URL;
@@ -1580,7 +1580,7 @@ router.get(
         const auth = getAuth(req);
         userId = auth.userId;
       } catch (authErr) {
-        req.log.error({ err: authErr }, "Clerk auth error on Granola status");
+        req.log.error({ err: authErr }, "Supabase Auth error on Granola status");
         return res.status(401).json({
           error: "Unauthorized - authentication failed",
           requestId: req.id,
@@ -1668,13 +1668,13 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       let userId: string | null = null;
-      let clerkOrgId: string | null | undefined;
+      let activeOrgId: string | null | undefined;
       try {
         const auth = getAuth(req);
         userId = auth.userId;
-        clerkOrgId = auth.orgId;
+        activeOrgId = auth.orgId;
       } catch (authErr) {
-        req.log.error({ err: authErr }, "Clerk auth error on agent-email initiate");
+        req.log.error({ err: authErr }, "Supabase Auth error on agent-email initiate");
         return res.status(401).json({ error: "Unauthorized", requestId: req.id });
       }
 
@@ -1685,8 +1685,8 @@ router.post(
       const { organizationId: explicitOrgId } = req.body;
       const supabase = getSupabaseAdmin();
 
-      // Use explicit orgId if provided, otherwise resolve from Clerk
-      const organizationId = explicitOrgId || await resolveOrganizationId(supabase, userId, clerkOrgId);
+      // Use explicit orgId if provided, otherwise resolve from the authenticated membership
+      const organizationId = explicitOrgId || await resolveOrganizationId(supabase, userId, activeOrgId);
 
       if (!organizationId) {
         return res.status(400).json({ error: "Missing organizationId", requestId: req.id });
@@ -1759,7 +1759,7 @@ function isAttioUrl(url: string): boolean {
 // ---------------------------------------------------------------------------
 // POST /api/oauth/attio/initiate
 // Initiate Attio MCP OAuth 2.1 flow
-// Authenticated via Clerk Bearer token (cross-origin safe)
+// Authenticated via Supabase access token (cross-origin safe)
 // ---------------------------------------------------------------------------
 
 router.post(
@@ -1768,7 +1768,7 @@ router.post(
     try {
       const supabase = getSupabaseAdmin();
 
-      // 1. Authenticate via Clerk Bearer token
+      // 1. Authenticate via Supabase access token
       const auth = getAuth(req);
       const userId = auth.userId;
       if (!userId) {
@@ -1777,8 +1777,8 @@ router.post(
 
       req.log.info({ userId }, "Starting Attio OAuth");
 
-      const clerkOrgId = auth.orgId;
-      const orgId = await resolveOrganizationId(supabase, userId, clerkOrgId);
+      const activeOrgId = auth.orgId;
+      const orgId = await resolveOrganizationId(supabase, userId, activeOrgId);
 
       if (!orgId) {
         return res.status(400).json({ error: "no_organization", requestId: req.id });
@@ -1945,7 +1945,7 @@ router.post(
         const auth = getAuth(req);
         userId = auth.userId;
       } catch (authErr) {
-        req.log.error({ err: authErr }, "Clerk auth error on agent-email callback");
+        req.log.error({ err: authErr }, "Supabase Auth error on agent-email callback");
         return res.status(401).json({ error: "Unauthorized", requestId: req.id });
       }
 
@@ -2073,11 +2073,11 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       let userId: string | null = null;
-      let clerkOrgId: string | null | undefined;
+      let activeOrgId: string | null | undefined;
       try {
         const auth = getAuth(req);
         userId = auth.userId;
-        clerkOrgId = auth.orgId;
+        activeOrgId = auth.orgId;
       } catch (authErr) {
         return res.status(401).json({ error: "Unauthorized", requestId: req.id });
       }
@@ -2088,7 +2088,7 @@ router.post(
 
       const { organizationId: explicitOrgId } = req.body;
       const supabase = getSupabaseAdmin();
-      const organizationId = explicitOrgId || await resolveOrganizationId(supabase, userId, clerkOrgId);
+      const organizationId = explicitOrgId || await resolveOrganizationId(supabase, userId, activeOrgId);
 
       if (!organizationId) {
         return res.status(400).json({ error: "Missing organizationId", requestId: req.id });
@@ -2166,11 +2166,11 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       let userId: string | null = null;
-      let clerkOrgId: string | null | undefined;
+      let activeOrgId: string | null | undefined;
       try {
         const auth = getAuth(req);
         userId = auth.userId;
-        clerkOrgId = auth.orgId;
+        activeOrgId = auth.orgId;
       } catch (authErr) {
         return res.status(401).json({ error: "Unauthorized", requestId: req.id });
       }
@@ -2181,7 +2181,7 @@ router.post(
 
       const { organizationId: explicitOrgId } = req.body;
       const supabase = getSupabaseAdmin();
-      const organizationId = explicitOrgId || await resolveOrganizationId(supabase, userId, clerkOrgId);
+      const organizationId = explicitOrgId || await resolveOrganizationId(supabase, userId, activeOrgId);
 
       if (!organizationId) {
         return res.status(400).json({ error: "Missing organizationId", requestId: req.id });
@@ -2425,11 +2425,11 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       let userId: string | null = null;
-      let clerkOrgId: string | null | undefined;
+      let activeOrgId: string | null | undefined;
       try {
         const auth = getAuth(req);
         userId = auth.userId;
-        clerkOrgId = auth.orgId;
+        activeOrgId = auth.orgId;
       } catch {
         return res.status(401).json({ error: "Unauthorized", requestId: req.id });
       }
@@ -2439,7 +2439,7 @@ router.get(
       }
 
       const supabase = getSupabaseAdmin();
-      const orgId = await resolveOrganizationId(supabase, userId, clerkOrgId);
+      const orgId = await resolveOrganizationId(supabase, userId, activeOrgId);
 
       if (!orgId) {
         return res.json({ connected: false, requestId: req.id });
@@ -2520,11 +2520,11 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       let userId: string | null = null;
-      let clerkOrgId: string | null | undefined;
+      let activeOrgId: string | null | undefined;
       try {
         const auth = getAuth(req);
         userId = auth.userId;
-        clerkOrgId = auth.orgId;
+        activeOrgId = auth.orgId;
       } catch {
         return res.status(401).json({ error: "Unauthorized", requestId: req.id });
       }
@@ -2534,7 +2534,7 @@ router.post(
       }
 
       const supabase = getSupabaseAdmin();
-      const orgId = await resolveOrganizationId(supabase, userId, clerkOrgId);
+      const orgId = await resolveOrganizationId(supabase, userId, activeOrgId);
 
       if (!orgId) {
         return res.status(400).json({ error: "No organization found", requestId: req.id });
@@ -2581,7 +2581,7 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId, orgId: clerkOrgId, orgRole } = auth;
+      const { userId, orgId: activeOrgId, orgRole } = auth;
 
       if (!userId) {
         return res.status(401).json({
@@ -2590,7 +2590,7 @@ router.post(
         });
       }
 
-      if (!clerkOrgId) {
+      if (!activeOrgId) {
         return res.status(403).json({
           error: "No organization context",
           requestId: req.id,
@@ -2605,7 +2605,7 @@ router.post(
       }
 
       const supabase = getSupabaseAdmin();
-      const organizationId = await resolveOrganizationId(supabase, userId, clerkOrgId);
+      const organizationId = await resolveOrganizationId(supabase, userId, activeOrgId);
 
       if (!organizationId) {
         return res.status(400).json({

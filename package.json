@@ -47,9 +47,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
-    "@clerk/backend": "^2.33.6",
-    "@clerk/express": "^1.7.82",
-    "@clerk/react": "^6.12.11",
     "@langchain/anthropic": "^1.5.3",
     "@langchain/core": "^1.2.4",
     "@langchain/langgraph": "^1.4.9",
@@ -78,7 +75,6 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "rollup": "^4.62.4",
-    "svix": "^1.99.1",
     "workflow": "^4.8.0",
     "zod": "^3.25.76"
   },

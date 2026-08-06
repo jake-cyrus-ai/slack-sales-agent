@@ -3,7 +3,7 @@
  *
  * Verifies connectivity to critical external dependencies:
  * - Supabase (PostgreSQL database)
- * - Clerk (authentication)
+ * - Supabase Auth
  * - Vercel Workflow (background job processing)
  * - OpenAI (LLM provider)
  * - Anthropic (LLM provider)
@@ -15,7 +15,6 @@
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { clerkClient } from "@clerk/express";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { WebClient } from "@slack/web-api";
@@ -38,7 +37,6 @@ export interface HealthCheckResult {
   status: ServiceStatus;
   services: {
     supabase: ServiceCheck;
-    clerk: ServiceCheck;
     workflow: ServiceCheck;
     openai: ServiceCheck;
     anthropic: ServiceCheck;
@@ -102,39 +100,6 @@ async function checkSupabase(): Promise<ServiceCheck> {
         error: result.error.message,
       };
     }
-
-    return {
-      status: "healthy",
-      latencyMs: Date.now() - startTime,
-    };
-  } catch (err) {
-    return {
-      status: "unhealthy",
-      latencyMs: Date.now() - startTime,
-      error: err instanceof Error ? err.message : "Unknown error",
-    };
-  }
-}
-
-async function checkClerk(): Promise<ServiceCheck> {
-  const startTime = Date.now();
-
-  try {
-    const secretKey = process.env.CLERK_SECRET_KEY;
-
-    if (!secretKey) {
-      return {
-        status: "unhealthy",
-        latencyMs: Date.now() - startTime,
-        error: "Missing CLERK_SECRET_KEY",
-      };
-    }
-
-    await withTimeout(
-      clerkClient.users.getUserList({ limit: 1 }),
-      HEALTH_CHECK_TIMEOUT_MS,
-      "Clerk"
-    );
 
     return {
       status: "healthy",
@@ -344,9 +309,8 @@ function aggregateStatus(services: HealthCheckResult["services"]): ServiceStatus
 }
 
 export async function checkDownstreamHealth(): Promise<HealthCheckResult> {
-  const [supabase, clerk, workflow, openai, anthropic, slack, google] = await Promise.all([
+  const [supabase, workflow, openai, anthropic, slack, google] = await Promise.all([
     checkSupabase(),
-    checkClerk(),
     checkWorkflow(),
     checkOpenAI(),
     checkAnthropic(),
@@ -354,7 +318,7 @@ export async function checkDownstreamHealth(): Promise<HealthCheckResult> {
     checkGoogle(),
   ]);
 
-  const services = { supabase, clerk, workflow, openai, anthropic, slack, google };
+  const services = { supabase, workflow, openai, anthropic, slack, google };
 
   return {
     status: aggregateStatus(services),

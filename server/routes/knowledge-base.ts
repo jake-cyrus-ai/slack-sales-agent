@@ -2,11 +2,11 @@
  * Knowledge Base API Routes
  *
  * Replaces the Supabase Edge Function "search-knowledge-base".
- * Uses Clerk authentication and performs synchronous vector search.
+ * Uses Supabase authentication and performs synchronous vector search.
  */
 
 import { Router, Response } from "express";
-import { getAuth, requireAuth } from "@clerk/express";
+import { getAuth, requireAuth } from "../lib/auth";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import type { Request } from "../types";
@@ -51,19 +51,19 @@ interface SearchResult {
   is_fallback?: boolean;
 }
 
-const resolveOrgIdFromClerk = async (
+const resolveOrganizationId = async (
   supabase: SupabaseClient,
-  clerkOrgId: string,
+  organizationId: string,
   log: Logger
 ): Promise<string | null> => {
   const { data: org, error } = await supabase
     .from("organizations")
     .select("id")
-    .eq("clerk_id", clerkOrgId)
+    .eq("id", organizationId)
     .maybeSingle();
 
   if (error) {
-    log.error({ err: error }, "Error resolving org by clerk_id");
+    log.error({ err: error }, "Error resolving organization");
     return null;
   }
 
@@ -82,9 +82,9 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId: clerkUserId, orgId: clerkOrgId } = auth;
+      const { userId: authUserId, orgId: activeOrgId } = auth;
 
-      if (!clerkUserId) {
+      if (!authUserId) {
         return res.status(401).json({
           error: "Unauthorized - No user ID in session",
           requestId: req.id,
@@ -102,10 +102,10 @@ router.post(
 
       const supabase = getSupabaseAdmin();
 
-      // Resolve the internal organization UUID from the Clerk org ID
+      // Resolve the internal organization UUID from the active organization ID
       let organizationId: string | null = null;
-      if (clerkOrgId) {
-        organizationId = await resolveOrgIdFromClerk(supabase, clerkOrgId, req.log);
+      if (activeOrgId) {
+        organizationId = await resolveOrganizationId(supabase, activeOrgId, req.log);
         if (organizationId) {
           req.log.info(
             { organizationId },
@@ -116,7 +116,7 @@ router.post(
 
       if (!organizationId) {
         req.log.info(
-          { userId: clerkUserId },
+          { userId: authUserId },
           "Searching knowledge base (user-scoped)"
         );
       }
@@ -139,10 +139,10 @@ router.post(
 
       if (organizationId) {
         searchParams.organization_id_filter = organizationId;
-        req.log.info({ organizationId, userId: clerkUserId }, "Search params");
+        req.log.info({ organizationId, userId: authUserId }, "Search params");
       } else {
-        searchParams.user_id_filter = clerkUserId;
-        req.log.info({ userId: clerkUserId }, "Search params (legacy)");
+        searchParams.user_id_filter = authUserId;
+        req.log.info({ userId: authUserId }, "Search params (legacy)");
       }
 
       const { data: results, error: searchError } = await supabase.rpc(
@@ -174,7 +174,7 @@ router.post(
           const { data: profile } = await supabase
             .from("profiles")
             .select("id")
-            .eq("clerk_id", clerkUserId)
+            .eq("user_id", authUserId)
             .maybeSingle();
           
           if (profile?.id) {
@@ -262,12 +262,12 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId, orgId: clerkOrgId, orgRole } = auth;
+      const { userId, orgId: activeOrgId, orgRole } = auth;
 
       if (!userId) {
         return res.status(401).json({ error: "Unauthorized", requestId: req.id });
       }
-      if (!clerkOrgId) {
+      if (!activeOrgId) {
         return res.status(403).json({ error: "No organization context", requestId: req.id });
       }
       if (!isOrgAdmin(orgRole)) {
@@ -285,7 +285,7 @@ router.post(
       }
 
       const supabase = getSupabaseAdmin();
-      const organizationId = await resolveOrgIdFromClerk(supabase, clerkOrgId, req.log);
+      const organizationId = await resolveOrganizationId(supabase, activeOrgId, req.log);
       if (!organizationId) {
         return res.status(400).json({ error: "Could not resolve organization", requestId: req.id });
       }
@@ -326,10 +326,10 @@ router.delete(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId, orgId: clerkOrgId, orgRole } = auth;
+      const { userId, orgId: activeOrgId, orgRole } = auth;
 
       if (!userId) return res.status(401).json({ error: "Unauthorized", requestId: req.id });
-      if (!clerkOrgId) return res.status(403).json({ error: "No organization context", requestId: req.id });
+      if (!activeOrgId) return res.status(403).json({ error: "No organization context", requestId: req.id });
       if (!isOrgAdmin(orgRole)) return res.status(403).json({ error: "Org admin role required", requestId: req.id });
 
       const id = req.params.id as string;
@@ -338,7 +338,7 @@ router.delete(
       }
 
       const supabase = getSupabaseAdmin();
-      const organizationId = await resolveOrgIdFromClerk(supabase, clerkOrgId, req.log);
+      const organizationId = await resolveOrganizationId(supabase, activeOrgId, req.log);
       if (!organizationId) {
         return res.status(400).json({ error: "Could not resolve organization", requestId: req.id });
       }
@@ -389,10 +389,10 @@ router.delete(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId, orgId: clerkOrgId, orgRole } = auth;
+      const { userId, orgId: activeOrgId, orgRole } = auth;
 
       if (!userId) return res.status(401).json({ error: "Unauthorized", requestId: req.id });
-      if (!clerkOrgId) return res.status(403).json({ error: "No organization context", requestId: req.id });
+      if (!activeOrgId) return res.status(403).json({ error: "No organization context", requestId: req.id });
       if (!isOrgAdmin(orgRole)) return res.status(403).json({ error: "Org admin role required", requestId: req.id });
 
       const id = req.params.id as string;
@@ -401,7 +401,7 @@ router.delete(
       }
 
       const supabase = getSupabaseAdmin();
-      const organizationId = await resolveOrgIdFromClerk(supabase, clerkOrgId, req.log);
+      const organizationId = await resolveOrganizationId(supabase, activeOrgId, req.log);
       if (!organizationId) {
         return res.status(400).json({ error: "Could not resolve organization", requestId: req.id });
       }

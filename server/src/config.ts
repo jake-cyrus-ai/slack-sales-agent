@@ -66,11 +66,6 @@ export const config = {
   slackTokenEncryptionKey: optional('SLACK_TOKEN_ENCRYPTION_KEY'),
   slackEngineeringWebhookUrl: optional('SLACK_ENGINEERING_WEBHOOK_URL'),
 
-  // Clerk
-  clerkSecretKey: optional('CLERK_SECRET_KEY'),
-  clerkPublishableKey: optional('CLERK_PUBLISHABLE_KEY'),
-  clerkWebhookSigningSecret: optional('CLERK_WEBHOOK_SIGNING_SECRET'),
-
   // Research
   exaApiKey: optional('EXA_API_KEY'),
 

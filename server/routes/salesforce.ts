@@ -8,7 +8,7 @@
  */
 
 import { Router, Response, NextFunction } from 'express';
-import { getAuth, requireAuth } from '@clerk/express';
+import { getAuth, requireAuth } from '../lib/auth';
 import crypto from 'crypto';
 import type { Request } from '../types';
 import { runSalesforceAgent, isSalesforceConfiguredForOrg } from '../src/salesforce/index.js';
@@ -24,15 +24,15 @@ const router = Router();
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function resolveOrgId(clerkOrgId: string, log?: Logger): Promise<string | null> {
+async function resolveOrgId(organizationId: string, log?: Logger): Promise<string | null> {
   const { data: org, error } = await supabase
     .from('organizations')
     .select('id')
-    .eq('clerk_id', clerkOrgId)
+    .eq('id', organizationId)
     .maybeSingle();
   if (error) {
     if (log) {
-      log.error({ err: error }, 'Error resolving org by clerk_id');
+      log.error({ err: error }, 'Error resolving organization');
     }
     return null;
   }
@@ -90,12 +90,12 @@ export function isValidSalesforceInstanceUrl(url: string): boolean {
 router.post('/query', requireAuth(), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const auth = getAuth(req);
-    const clerkOrgId = auth.orgId;
-    if (!clerkOrgId) {
+    const activeOrgId = auth.orgId;
+    if (!activeOrgId) {
       return res.status(400).json({ error: 'No organization selected', requestId: req.id });
     }
 
-    const organizationId = await resolveOrgId(clerkOrgId, req.log);
+    const organizationId = await resolveOrgId(activeOrgId, req.log);
     if (!organizationId) {
       return res.status(404).json({ error: 'Organization not found', requestId: req.id });
     }
@@ -153,10 +153,10 @@ router.post('/oauth/prepare', requireAuth(), async (req: Request, res: Response,
   try {
     const auth = getAuth(req);
     const userId = auth.userId;
-    const clerkOrgId = auth.orgId;
+    const activeOrgId = auth.orgId;
     const orgRole = auth.orgRole;
 
-    if (!clerkOrgId || !userId) {
+    if (!activeOrgId || !userId) {
       return res.status(400).json({ error: 'No organization selected' });
     }
 
@@ -164,7 +164,7 @@ router.post('/oauth/prepare', requireAuth(), async (req: Request, res: Response,
       return res.status(403).json({ error: 'Only organization admins can connect Salesforce' });
     }
 
-    const organizationId = await resolveOrgId(clerkOrgId, req.log);
+    const organizationId = await resolveOrgId(activeOrgId, req.log);
     if (!organizationId) {
       return res.status(404).json({ error: 'Organization not found' });
     }
@@ -220,19 +220,19 @@ router.post('/oauth/initiate', requireAuth(), async (req: Request, res: Response
   try {
     const auth = getAuth(req);
     const userId = auth.userId;
-    const clerkOrgId = auth.orgId;
+    const activeOrgId = auth.orgId;
     const orgRole = auth.orgRole;
 
-    if (!clerkOrgId || !userId) {
+    if (!activeOrgId || !userId) {
       return res.status(400).json({ error: 'No organization selected' });
     }
 
-    // Only admins/owners can connect (supports custom Clerk roles containing "admin")
+    // Only admins/owners can connect (supports custom membership roles containing "admin")
     if (orgRole !== 'org:owner' && !orgRole?.includes('admin')) {
       return res.status(403).json({ error: 'Only organization admins can connect Salesforce' });
     }
 
-    const organizationId = await resolveOrgId(clerkOrgId, req.log);
+    const organizationId = await resolveOrgId(activeOrgId, req.log);
     if (!organizationId) {
       return res.status(404).json({ error: 'Organization not found' });
     }
@@ -536,10 +536,10 @@ router.get('/oauth/callback', async (req: Request, res: Response, next: NextFunc
 router.post('/oauth/disconnect', requireAuth(), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const auth = getAuth(req);
-    const clerkOrgId = auth.orgId;
+    const activeOrgId = auth.orgId;
     const orgRole = auth.orgRole;
 
-    if (!clerkOrgId) {
+    if (!activeOrgId) {
       return res.status(400).json({ error: 'No organization selected' });
     }
 
@@ -547,7 +547,7 @@ router.post('/oauth/disconnect', requireAuth(), async (req: Request, res: Respon
       return res.status(403).json({ error: 'Only organization admins can disconnect Salesforce' });
     }
 
-    const organizationId = await resolveOrgId(clerkOrgId, req.log);
+    const organizationId = await resolveOrgId(activeOrgId, req.log);
     if (!organizationId) {
       return res.status(404).json({ error: 'Organization not found' });
     }
@@ -595,13 +595,13 @@ router.post('/oauth/disconnect', requireAuth(), async (req: Request, res: Respon
 router.get('/oauth/status', requireAuth(), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const auth = getAuth(req);
-    const clerkOrgId = auth.orgId;
+    const activeOrgId = auth.orgId;
 
-    if (!clerkOrgId) {
+    if (!activeOrgId) {
       return res.status(400).json({ error: 'No organization selected' });
     }
 
-    const organizationId = await resolveOrgId(clerkOrgId, req.log);
+    const organizationId = await resolveOrgId(activeOrgId, req.log);
     if (!organizationId) {
       return res.status(404).json({ error: 'Organization not found' });
     }

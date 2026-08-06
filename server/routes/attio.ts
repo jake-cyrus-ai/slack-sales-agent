@@ -7,7 +7,7 @@
  */
 
 import { Router, Response, NextFunction } from 'express';
-import { getAuth } from '@clerk/express';
+import { getAuth } from '../lib/auth';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { Request } from '../types';
 import { runAttioAgent, hasAttioConnection } from '../src/attio/index.js';
@@ -36,22 +36,15 @@ const getSupabaseAdmin = (): SupabaseClient => {
 };
 
 // ---------------------------------------------------------------------------
-// Helper: resolve org ID from Clerk session
+// Helper: use the active internal organization or first membership.
 // ---------------------------------------------------------------------------
 
 async function resolveOrganizationId(
   supabase: SupabaseClient,
   userId: string,
-  clerkOrgId: string | null | undefined,
+  activeOrgId: string | null | undefined,
 ): Promise<string | null> {
-  if (clerkOrgId) {
-    const { data: org } = await supabase
-      .from('organizations')
-      .select('id')
-      .eq('clerk_id', clerkOrgId)
-      .single();
-    if (org?.id) return org.id;
-  }
+  if (activeOrgId) return activeOrgId;
 
   const { data: membership } = await supabase
     .from('organization_users')

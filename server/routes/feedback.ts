@@ -6,12 +6,12 @@
  *
  * Replaces the direct `supabase.from("conversation_feedback").insert(...)` the
  * MessageFeedback component used to do from the browser. The acting user id is
- * derived server-side from the Clerk session (getAuth) — the client never
+ * derived server-side from the Supabase Auth session (getAuth) — the client never
  * supplies it — so feedback can't be attributed to another user.
  */
 
 import { Router, type Response } from "express";
-import { getAuth, requireAuth } from "@clerk/express";
+import { getAuth, requireAuth } from "../lib/auth";
 import { z } from "zod";
 import type { Request } from "../types";
 import { validateBody } from "../lib/validate";

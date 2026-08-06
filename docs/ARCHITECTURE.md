@@ -32,4 +32,4 @@ The sanitized Supabase baseline contains organizations, users, Slack mappings, e
 
 ## Deployment boundary
 
-Vercel is the reference compute and workflow platform; Supabase is the state layer. Clerk is isolated behind the authentication boundary. The React UI is intentionally limited to installation, connections, health, approval policy, preferences, disconnect/deletion, and onboarding confirmation.
+Vercel is the reference compute and workflow platform; Supabase provides the state and authentication layers. The React UI is intentionally limited to installation, connections, health, approval policy, preferences, disconnect/deletion, and onboarding confirmation.

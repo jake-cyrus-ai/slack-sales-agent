@@ -12,7 +12,7 @@ A Slack-native, open-source sales agent platform that connects to email, calenda
 - Salesforce accounts, contacts, opportunities, tasks, notes, and approval-gated writes
 - explicit and inferred preferences, corrections, feedback provenance, and tenant isolation
 - optional autonomous inbound-email qualification and response policies
-- a small Clerk-authenticated configuration UI; Slack remains the primary product surface
+- a small Supabase Auth configuration UI; Slack remains the primary product surface
 
 ```text
 Slack → verified event → tenant resolution → Vercel Workflow → supervisor
@@ -22,7 +22,7 @@ Slack → verified event → tenant resolution → Vercel Workflow → superviso
 
 ## Quick start
 
-Requirements: Node.js 22+, pnpm 10+, a Supabase project, Clerk, Vercel, Slack, Anthropic, and OpenAI. The included high-frequency cron schedules require a Vercel plan that supports them.
+Requirements: Node.js 22+, pnpm 10+, a Supabase project, Vercel, Slack, Anthropic, and OpenAI. The included high-frequency cron schedules require a Vercel plan that supports them.
 
 ```bash
 git clone https://github.com/jake-cyrus-ai/slack-sales-agent.git
@@ -50,7 +50,7 @@ pnpm dev:all
 
 Vercel CLI prints the local origin (normally `http://localhost:3000`) and serves the UI, API, callbacks, and workflow runtime together.
 
-For a production bring-your-own-keys walkthrough, callback URL table, Clerk setup, and smoke test, see [Deployment](docs/DEPLOYMENT.md). Provider-specific details are in [Google OAuth](docs/guides/GOOGLE-OAUTH.md) and [Salesforce OAuth](docs/guides/SALESFORCE-ONBOARDING.md).
+For a production bring-your-own-keys walkthrough, callback URL table, Supabase Auth setup, and smoke test, see [Deployment](docs/DEPLOYMENT.md). Provider-specific details are in [Google OAuth](docs/guides/GOOGLE-OAUTH.md) and [Salesforce OAuth](docs/guides/SALESFORCE-ONBOARDING.md).
 
 ## Integration ownership
 

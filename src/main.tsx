@@ -1,20 +1,22 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { ClerkProvider } from "@clerk/react";
+import { createClient } from "@supabase/supabase-js";
 import App from "./App";
 import "./index.css";
 
 async function start() {
-  let clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-  if (!clerkKey) {
+  let url = import.meta.env.VITE_SUPABASE_URL;
+  let key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) {
     const response = await fetch(`${(import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "")}/config`);
     const config = await response.json();
-    clerkKey = config.clerkPublishableKey;
+    url ||= config.supabaseUrl;
+    key ||= config.supabasePublishableKey;
   }
-  if (!clerkKey) throw new Error("Clerk publishable key is not configured on the server.");
-
+  if (!url || !key) throw new Error("Supabase public configuration is missing.");
+  const supabase = createClient(url, key);
   ReactDOM.createRoot(document.getElementById("root")!).render(
-    <React.StrictMode><ClerkProvider publishableKey={clerkKey}><App /></ClerkProvider></React.StrictMode>,
+    <React.StrictMode><App supabase={supabase} /></React.StrictMode>,
   );
 }
 

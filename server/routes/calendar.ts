@@ -5,7 +5,7 @@
  */
 
 import { Router, Response } from "express";
-import { getAuth, requireAuth } from "@clerk/express";
+import { getAuth, requireAuth } from "../lib/auth";
 import { workflow } from "../workflows/client";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
@@ -29,17 +29,17 @@ const getSupabaseAdmin = (): SupabaseClient => {
 
 const resolveOrgId = async (
   supabase: SupabaseClient,
-  clerkOrgId: string,
+  organizationId: string,
   log: Logger
 ): Promise<string | null> => {
   const { data: org, error } = await supabase
     .from("organizations")
     .select("id")
-    .eq("clerk_id", clerkOrgId)
+    .eq("id", organizationId)
     .maybeSingle();
 
   if (error) {
-    log.error({ err: error }, "Error resolving org by clerk_id");
+    log.error({ err: error }, "Error resolving organization");
     return null;
   }
 
@@ -64,9 +64,9 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId: clerkUserId, orgId: clerkOrgId } = auth;
+      const { userId: authUserId, orgId: activeOrgId } = auth;
 
-      if (!clerkUserId) {
+      if (!authUserId) {
         return res.status(401).json({
           error: "Unauthorized - No user ID in session",
           requestId: req.id,
@@ -76,7 +76,7 @@ router.post(
       const { syncType } = req.body as SyncRequestBody;
 
       req.log.info(
-        { userId: clerkUserId, syncType: syncType || "on_demand" },
+        { userId: authUserId, syncType: syncType || "on_demand" },
         "Calendar sync requested"
       );
 
@@ -86,7 +86,7 @@ router.post(
       const { data: credentials, error: credError } = await supabase
         .from("calendar_credentials")
         .select("id, sync_status")
-        .eq("user_id", clerkUserId)
+        .eq("user_id", authUserId)
         .maybeSingle();
 
       if (credError) {
@@ -116,8 +116,8 @@ router.post(
 
       // Resolve organization ID if user is in an org context
       let organizationId: string | undefined;
-      if (clerkOrgId) {
-        const resolvedOrgId = await resolveOrgId(supabase, clerkOrgId, req.log);
+      if (activeOrgId) {
+        const resolvedOrgId = await resolveOrgId(supabase, activeOrgId, req.log);
         if (resolvedOrgId) {
           organizationId = resolvedOrgId;
         }
@@ -127,12 +127,12 @@ router.post(
       await workflow.send({
         name: "calendar/sync",
         data: {
-          userId: clerkUserId,
+          userId: authUserId,
           organizationId,
         },
       });
 
-      req.log.info({ userId: clerkUserId }, "Dispatched calendar/sync event");
+      req.log.info({ userId: authUserId }, "Dispatched calendar/sync event");
 
       return res.status(202).json({
         success: true,
@@ -175,9 +175,9 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId: clerkUserId, orgId: clerkOrgId } = auth;
+      const { userId: authUserId, orgId: activeOrgId } = auth;
 
-      if (!clerkUserId) {
+      if (!authUserId) {
         return res.status(401).json({
           error: "Unauthorized - No user ID in session",
           requestId: req.id,
@@ -217,7 +217,7 @@ router.post(
       }
 
       req.log.info(
-        { userId: clerkUserId, summary },
+        { userId: authUserId, summary },
         "Calendar create requested"
       );
 
@@ -227,7 +227,7 @@ router.post(
       const { data: credentials, error: credError } = await supabase
         .from("calendar_credentials")
         .select("id, sync_status")
-        .eq("user_id", clerkUserId)
+        .eq("user_id", authUserId)
         .maybeSingle();
 
       if (credError) {
@@ -257,8 +257,8 @@ router.post(
 
       // Resolve organization ID if user is in an org context
       let organizationId: string | undefined;
-      if (clerkOrgId) {
-        const resolvedOrgId = await resolveOrgId(supabase, clerkOrgId, req.log);
+      if (activeOrgId) {
+        const resolvedOrgId = await resolveOrgId(supabase, activeOrgId, req.log);
         if (resolvedOrgId) {
           organizationId = resolvedOrgId;
         }
@@ -268,7 +268,7 @@ router.post(
       await workflow.send({
         name: "calendar/create-event",
         data: {
-          userId: clerkUserId,
+          userId: authUserId,
           summary,
           startDateTime,
           endDateTime,
@@ -281,7 +281,7 @@ router.post(
       });
 
       req.log.info(
-        { userId: clerkUserId, summary },
+        { userId: authUserId, summary },
         "Dispatched calendar/create-event"
       );
 
@@ -341,9 +341,9 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId: clerkUserId, orgId: clerkOrgId } = auth;
+      const { userId: authUserId, orgId: activeOrgId } = auth;
 
-      if (!clerkUserId) {
+      if (!authUserId) {
         return res.status(401).json({
           error: "Unauthorized - No user ID in session",
           requestId: req.id,
@@ -354,7 +354,7 @@ router.post(
         req.body as MeetingPrepRequestBody;
 
       req.log.info(
-        { userId: clerkUserId, eventId: eventId || "from query" },
+        { userId: authUserId, eventId: eventId || "from query" },
         "Meeting prep requested"
       );
 
@@ -362,8 +362,8 @@ router.post(
 
       // Resolve organization ID if user is in an org context
       let organizationId: string | undefined;
-      if (clerkOrgId) {
-        const resolvedOrgId = await resolveOrgId(supabase, clerkOrgId, req.log);
+      if (activeOrgId) {
+        const resolvedOrgId = await resolveOrgId(supabase, activeOrgId, req.log);
         if (resolvedOrgId) {
           organizationId = resolvedOrgId;
         }
@@ -375,7 +375,7 @@ router.post(
         const { data: events, error: eventsError } = await supabase
           .from("calendar_events")
           .select("id, summary, start_time, attendees")
-          .eq("user_id", clerkUserId)
+          .eq("user_id", authUserId)
           .gte("start_time", dateContext.dateFrom)
           .lte("start_time", dateContext.dateTo)
           .order("start_time", { ascending: true })
@@ -414,7 +414,7 @@ router.post(
       const { data: cachedPrep, error: cacheError } = await supabase
         .from("meeting_prep_cache")
         .select("*")
-        .eq("user_id", clerkUserId)
+        .eq("user_id", authUserId)
         .eq("event_id", targetEventId)
         .maybeSingle();
 
@@ -432,12 +432,12 @@ router.post(
       }
 
       // Check for existing workflow run (to avoid duplicates)
-      const threadId = `meeting-prep-${clerkUserId}-${targetEventId}`;
+      const threadId = `meeting-prep-${authUserId}-${targetEventId}`;
       const { data: existingRun, error: runCheckError } = await supabase
         .from("langgraph_workflow_runs")
         .select("*")
         .eq("thread_id", threadId)
-        .eq("user_id", clerkUserId)
+        .eq("user_id", authUserId)
         .order("started_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -473,7 +473,7 @@ router.post(
       await workflow.send({
         name: "calendar/meeting-prep",
         data: {
-          userId: clerkUserId,
+          userId: authUserId,
           eventId: targetEventId,
           organizationId,
           requireApproval: false,
@@ -481,7 +481,7 @@ router.post(
       });
 
       req.log.info(
-        { userId: clerkUserId, eventId: targetEventId },
+        { userId: authUserId, eventId: targetEventId },
         "Dispatched calendar/meeting-prep event"
       );
 
@@ -514,9 +514,9 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
-      const { userId: clerkUserId } = auth;
+      const { userId: authUserId } = auth;
 
-      if (!clerkUserId) {
+      if (!authUserId) {
         return res.status(401).json({
           error: "Unauthorized - No user ID in session",
           requestId: req.id,
@@ -533,7 +533,7 @@ router.get(
       }
 
       req.log.info(
-        { userId: clerkUserId, eventId },
+        { userId: authUserId, eventId },
         "Polling meeting prep"
       );
 
@@ -543,7 +543,7 @@ router.get(
       const { data: cachedPrep, error: cacheError } = await supabase
         .from("meeting_prep_cache")
         .select("*")
-        .eq("user_id", clerkUserId)
+        .eq("user_id", authUserId)
         .eq("event_id", eventId)
         .maybeSingle();
 
@@ -561,12 +561,12 @@ router.get(
       }
 
       // Check workflow run status
-      const threadId = `meeting-prep-${clerkUserId}-${eventId}`;
+      const threadId = `meeting-prep-${authUserId}-${eventId}`;
       const { data: workflowRun, error: runError } = await supabase
         .from("langgraph_workflow_runs")
         .select("*")
         .eq("thread_id", threadId)
-        .eq("user_id", clerkUserId)
+        .eq("user_id", authUserId)
         .order("started_at", { ascending: false })
         .limit(1)
         .maybeSingle();
