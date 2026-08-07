@@ -37,7 +37,7 @@ export async function writeFeedbackEvent(params: FeedbackEventParams): Promise<v
   try {
     const supabase = getSupabaseAdmin();
 
-    const { error } = await supabase.from("feedback_events").insert({
+    const { data: feedbackEvent, error } = await supabase.from("feedback_events").insert({
       user_id: params.userId,
       organization_id: params.organizationId,
       domain: params.domain,
@@ -47,11 +47,37 @@ export async function writeFeedbackEvent(params: FeedbackEventParams): Promise<v
       delta: params.delta ?? null,
       context: params.context ?? null,
       source_ref: params.sourceRef ?? null,
-    });
+    }).select("id").single();
 
     if (error) {
       log.error({ err: error.message }, "insert failed");
       return;
+    }
+
+    // Corrections are durable instructions, but only the user's own correction
+    // text is mirrored to memory. Agent output and message bodies remain in the
+    // run/feedback artifact and are never promoted as learning by default.
+    if (params.signalType === "correction") {
+      const correctionText = typeof params.userAction?.message === "string"
+        ? params.userAction.message.trim()
+        : "";
+      if (correctionText) {
+        const { getMemoryService } = await import("../../src/services/memory/index");
+        await getMemoryService().save(
+          { userId: params.userId, organizationId: params.organizationId },
+          [{ role: "correction", content: correctionText }],
+          {
+            category: "correction",
+            metadata: {
+              source: "slack",
+              category: "correction",
+              feedbackEventId: feedbackEvent?.id,
+              sourceRef: params.sourceRef,
+              proactiveEligible: true,
+            },
+          },
+        );
+      }
     }
 
     // Check if unprocessed count hit threshold → trigger learning extraction

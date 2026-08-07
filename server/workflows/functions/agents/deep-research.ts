@@ -6,15 +6,15 @@
  */
 
 import { workflow } from "../../client";
-import { registry } from "../../../src/skills/registry.js";
-import { allSkills } from "../../../src/skills/definitions/index.js";
-import { buildPromptContext, type UserInfo } from "../../../src/agent/system-prompt.js";
-import { GranolaClientScope } from "../../../src/services/granola-client.js";
-import { getMemoryService } from "../../../src/services/memory/index.js";
+import { registry } from "../../../src/skills/registry";
+import { allSkills } from "../../../src/skills/definitions/index";
+import { buildPromptContext, type UserInfo } from "../../../src/agent/system-prompt";
+import { GranolaClientScope } from "../../../src/services/granola-client";
+import { getMemoryService } from "../../../src/services/memory/index";
 import { HumanMessage } from "@langchain/core/messages";
 import { getSupabaseForUser } from "../../utils/supabase";
 import { trackUsageEvent } from "../../../src/lib/usage-tracking";
-import type { SkillContext } from "../../../src/skills/types.js";
+import type { SkillContext } from "../../../src/skills/types";
 
 export const deepResearchAgent = workflow.createFunction(
   {

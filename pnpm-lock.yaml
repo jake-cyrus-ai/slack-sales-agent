@@ -5,7 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  undici: '>=7.29.0'
+  '@workflow/world-local>undici': 7.29.0
+  '@workflow/world-vercel>undici': 7.29.0
 
 importers:
 
@@ -4473,6 +4474,10 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
+  undici@7.29.0:
+    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
+    engines: {node: '>=20.18.1'}
+
   undici@8.10.0:
     resolution: {integrity: sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==}
     engines: {node: '>=22.19.0'}
@@ -6557,7 +6562,7 @@ snapshots:
       '@workflow/world': 4.3.1
       async-sema: 3.1.1
       ulid: 3.0.2
-      undici: 8.10.0
+      undici: 7.29.0
       zod: 4.3.6
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
@@ -6569,7 +6574,7 @@ snapshots:
       '@workflow/errors': 4.2.1
       '@workflow/world': 4.3.1
       cbor-x: 1.6.0
-      undici: 8.10.0
+      undici: 7.29.0
       zod: 4.3.6
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
@@ -9256,6 +9261,8 @@ snapshots:
       unplugin: 2.3.11
 
   undici-types@6.21.0: {}
+
+  undici@7.29.0: {}
 
   undici@8.10.0: {}
 

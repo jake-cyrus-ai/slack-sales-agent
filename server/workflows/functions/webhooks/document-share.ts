@@ -8,7 +8,7 @@
  */
 
 import { getSupabaseAdmin } from "../../utils/supabase";
-import { generateEmbedding } from "../../../src/services/embeddings.js";
+import { generateEmbedding } from "../../../src/services/embeddings";
 import { logger } from "../../../lib/logger";
 
 const log = logger.child({ fn: "document-share" });

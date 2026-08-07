@@ -6,7 +6,7 @@
  * Ported from supabase/functions/analyze-user-preferences edge function.
  */
 
-import { workflow } from '../../client.js';
+import { workflow } from '../../client';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { getSupabaseAdmin } from '../../utils/supabase';
 import { resolveOrgForUser } from '../../utils/tenant-resolver';

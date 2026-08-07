@@ -1,7 +1,7 @@
 import { FatalError } from "workflow";
-import type { WorkflowEvent } from "../client.js";
-import { getSupabaseAdmin, verifyUserInOrganization } from "../utils/supabase.js";
-import { logger } from "../../lib/logger.js";
+import type { WorkflowEvent } from "../client";
+import { getSupabaseAdmin, verifyUserInOrganization } from "../utils/supabase";
+import { logger } from "../../lib/logger";
 
 const log = logger.child({ component: "workflow-tenant-validation" });
 const cache = new Map<string, { verified: boolean; expiresAt: number }>();

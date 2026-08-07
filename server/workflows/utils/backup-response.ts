@@ -15,7 +15,7 @@
  */
 
 import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
-import { createLLM } from "../../src/lib/llm-retry.js";
+import { createLLM } from "../../src/lib/llm-retry";
 import type { ErrorCategory } from "./slack-error-reporter";
 import { logger } from "../../lib/logger";
 

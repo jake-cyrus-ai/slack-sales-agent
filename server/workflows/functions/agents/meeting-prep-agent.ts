@@ -15,7 +15,7 @@ import { logger } from "../../../lib/logger";
 import { workflow } from "../../client";
 import { getSupabaseAdmin } from "../../utils/supabase";
 import { resolveOrgForUser } from "../../utils/tenant-resolver";
-import { getGoogleTokens, googleApiFetch } from "../../../src/services/token-manager.js";
+import { getGoogleTokens, googleApiFetch } from "../../../src/services/token-manager";
 import {
   decryptBotToken,
   sendSlackBlockMessage,
@@ -25,7 +25,7 @@ import {
   startWorkflowRun,
   logWorkflowStep,
   completeWorkflowRun,
-} from "../../../src/lib/workflow-tracking.js";
+} from "../../../src/lib/workflow-tracking";
 
 const log = logger.child({ fn: "meeting-prep-agent" });
 
@@ -267,6 +267,47 @@ Format for Slack (use *bold* not **bold**, use _italic_ not __italic__).`;
 
     // Step 6: Deliver via Slack DM
     const sendResult = await step.run("deliver-slack-dm", async () => {
+      const supabase = getSupabaseAdmin();
+      const deliveryKey = `meeting-prep:${userId}:${eventId}`;
+
+      // Transition the scanner's durable claim to executing. PostgreSQL
+      // rechecks this predicate after row locking, so only one concurrent run
+      // can acquire it. Manual events create their own claim here.
+      let { data: claim, error: claimError } = await supabase
+        .from("idempotency_keys")
+        .update({ status: "executing", updated_at: new Date().toISOString() })
+        .eq("organization_id", actualOrgId)
+        .eq("key", deliveryKey)
+        .eq("operation", "meeting_prep_delivery")
+        .in("status", ["started", "failed"])
+        .select("id")
+        .maybeSingle();
+
+      if (claimError) throw new Error(`Failed to claim meeting prep delivery: ${claimError.message}`);
+
+      if (!claim) {
+        const inserted = await supabase
+          .from("idempotency_keys")
+          .insert({
+            organization_id: actualOrgId,
+            key: deliveryKey,
+            operation: "meeting_prep_delivery",
+            status: "executing",
+          })
+          .select("id")
+          .maybeSingle();
+        claim = inserted.data;
+        claimError = inserted.error;
+
+        if (claimError?.code === "23505") {
+          log.info({ userId, eventId }, "Meeting prep delivery already claimed; skipping duplicate");
+          return { ok: true, skipped: true, ts: null };
+        }
+        if (claimError || !claim) {
+          throw new Error(`Failed to create meeting prep delivery claim: ${claimError?.message || "unknown error"}`);
+        }
+      }
+
             const startTime = new Date(meeting.startTime);
       const minutesUntil = Math.round((startTime.getTime() - Date.now()) / 60000);
       const timeLabel = minutesUntil > 0
@@ -335,10 +376,29 @@ Format for Slack (use *bold* not **bold**, use _italic_ not __italic__).`;
       );
 
       if (!result.ok) {
+        await supabase
+          .from("idempotency_keys")
+          .update({ status: "failed", result: { error: result.error }, updated_at: new Date().toISOString() })
+          .eq("id", claim.id);
         log.error({ err: result.error }, "Slack delivery failed");
+        throw new Error(`Slack delivery failed: ${result.error}`);
       }
+
+      await supabase
+        .from("idempotency_keys")
+        .update({ status: "completed", result: { slackMessageTs: result.ts }, updated_at: new Date().toISOString() })
+        .eq("id", claim.id);
       return result;
     });
+
+    if ("skipped" in sendResult && sendResult.skipped) {
+      if (workflowRunId) {
+        await step.run("cancel-duplicate-delivery", () =>
+          completeWorkflowRun({ workflowRunId: workflowRunId!, status: "cancelled", errorCode: "duplicate_delivery" })
+        );
+      }
+      return { status: "skipped", reason: "duplicate_delivery", eventId };
+    }
 
     // Step 7: Write to meeting_prep_cache so the scan-upcoming-meetings dedup works
     await step.run("cache-meeting-prep", async () => {

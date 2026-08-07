@@ -13,7 +13,7 @@
 
 import { workflow } from "../../client";
 import { getSupabaseAdmin } from "../../utils";
-import { getGranolaClient } from "../../../src/services/granola-client.js";
+import { getGranolaClient } from "../../../src/services/granola-client";
 import { logger } from "../../../lib/logger";
 
 const log = logger.child({ fn: "scan-new-meetings" });

@@ -80,12 +80,8 @@ export class SupabaseMemoryProvider implements IMemoryService {
       };
 
       // Determine if this should be org-shared
-      let effectiveNamespace = scope.skillNamespace || null;
-      let effectiveCategory = options?.category || null;
-      if (scope.organizationId && !scope.skillNamespace && shouldBeOrgShared(content)) {
-        effectiveNamespace = 'org_shared';
-        effectiveCategory = 'org_shared';
-      }
+      const effectiveNamespace = scope.skillNamespace || 'general';
+      const effectiveCategory = options?.category || 'historical_artifact';
 
       const embedding = await generateEmbedding(content);
 
@@ -181,6 +177,10 @@ export class SupabaseMemoryProvider implements IMemoryService {
 
     if (error) {
       log.error({ err: error, details: error.details, hint: error.hint }, 'Hybrid search FAILED, falling back to vector-only');
+      // A category-filtered query must fail closed. The legacy vector RPC has
+      // no category parameter and could leak historical artifacts back into
+      // proactive context if the hybrid RPC is unavailable.
+      if (category) return { results: [], error: error.message };
       return this.vectorOnlySearch(embedding, scope, limit);
     }
 
@@ -301,20 +301,4 @@ export class SupabaseMemoryProvider implements IMemoryService {
       log.info({ count: oldest.length, userId: scope.userId }, `Pruned ${oldest.length} old memories`);
     }
   }
-}
-
-// ─── Org-shared heuristic ────────────────────────────────────────────────────
-
-const ORG_SHARED_SIGNALS = [
-  /\b(?:competitor|competitive|vs\.?|versus|alternative)\b/i,
-  /\b(?:pricing|price point|ACV|ARR|MRR|discount)\b/i,
-  /\b(?:we decided|team agreed|our policy|company policy)\b/i,
-  /\b(?:product roadmap|feature request|release)\b/i,
-  /\b(?:battle card|objection handling|win[\s/]loss)\b/i,
-  /\b(?:SOC\s*2|GDPR|HIPAA|compliance|security review)\b/i,
-];
-
-/** Heuristic: does this content look like team-relevant knowledge? */
-function shouldBeOrgShared(content: string): boolean {
-  return ORG_SHARED_SIGNALS.some((p) => p.test(content));
 }

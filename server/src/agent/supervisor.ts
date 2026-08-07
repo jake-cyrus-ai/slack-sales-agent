@@ -32,6 +32,7 @@ import { createSkillAgent } from '../skills/create-skill-agent.js';
 import type { SourceInfo } from '../slack/formatter.js';
 import { checkUserIntegrations, type UserIntegrations } from '../services/integration-check.js';
 import { logger } from '../../lib/logger.js';
+import { PROACTIVE_MEMORY_CATEGORIES, calendarDayBounds, isDateSensitiveCalendarQuery } from './context-policy.js';
 
 const log = logger.child({ component: 'supervisor' });
 import { supabase } from '../lib/supabase.js';
@@ -568,15 +569,15 @@ async function loadContextNode(state: SupervisorStateType) {
           organizationId: state.organizationId,
           skillNamespace: undefined,
         };
-        // Search general memories + facts in parallel for better recall
-        const [generalResult, factResult] = await Promise.all([
-          memoryService.search(scope, query, 3, { includeOrgShared: true }),
-          memoryService.search(scope, query, 3, { category: 'fact' }),
-        ]);
+        const durableResults = await Promise.all(
+          PROACTIVE_MEMORY_CATEGORIES.map((category) =>
+            memoryService.search(scope, query, 3, { category, includeOrgShared: true })
+          )
+        );
 
         // Merge and deduplicate by content prefix
         const seen = new Set<string>();
-        const allResults = [...generalResult.results, ...factResult.results]
+        const allResults = durableResults.flatMap((result) => result.results)
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
           .filter((m) => {
             const key = m.content.slice(0, 80).toLowerCase();
@@ -1019,6 +1020,31 @@ async function runSkillAgent(
   }
 
   const finalTools = injectedTools || skill.tools(skillCtx);
+
+  // Date-relative calendar questions must have authoritative provider evidence.
+  // Prompt instructions alone are insufficient: a model may otherwise answer
+  // from semantically similar historical memory without invoking the tool.
+  if (skillName === 'calendar') {
+    const lastHuman = agentMessages.filter((m: BaseMessage) => m._getType() === 'human').pop();
+    const currentText = typeof lastHuman?.content === 'string' ? lastHuman.content : '';
+    if (isDateSensitiveCalendarQuery(currentText)) {
+      const calendarTool = finalTools.find((tool) => tool.name === 'calendar_search');
+      if (calendarTool) {
+        const bounds = calendarDayBounds(skillCtx.promptCtx.currentISO, skillCtx.userTimezone || 'America/New_York');
+        const authoritativeResult = await calendarTool.invoke({
+          dateFrom: bounds.dateFrom,
+          dateTo: bounds.dateTo,
+          salesOnly: false,
+          fresh: true,
+        });
+        log.info({ skillName, date: bounds.date, timezone: skillCtx.userTimezone }, 'Loaded mandatory live calendar evidence');
+        agentMessages = [
+          ...agentMessages,
+          new HumanMessage(`[System-provided authoritative Google Calendar result for ${bounds.date} in ${skillCtx.userTimezone}. Use this result for the answer; historical memory is non-authoritative.]\n${String(authoritativeResult)}`),
+        ];
+      }
+    }
+  }
   const agent = skill.createAgent
     ? skill.createAgent(skillCtx, finalTools)
     : createSkillAgent(skill, skillCtx, finalTools);
@@ -1107,11 +1133,13 @@ async function runSkillAgent(
           { role: 'assistant', content: responseText },
         ];
         const saveSource = skillCtx.slackContext?.channelId ? 'slack' : 'web';
-        log.info({ skillName, source: saveSource, userSnippet: userText.slice(0, 80), responseSnippet: responseText.slice(0, 80) }, `Auto-saving ${skillName} turn`);
+        log.info({ skillName, source: saveSource, userSnippet: userText.slice(0, 80), responseSnippet: responseText.slice(0, 80) }, `Archiving ${skillName} turn`);
         skillCtx.memoryService.save(memScope, memMessages, {
-          category: 'conversation',
+          category: 'historical_artifact',
           metadata: {
             source: saveSource,
+            category: 'historical_artifact',
+            proactiveEligible: false,
             channelId: skillCtx.slackContext?.channelId,
             threadTs: skillCtx.slackContext?.threadTs,
           },
@@ -1149,6 +1177,7 @@ async function runSkillAgent(
     await skillCtx.granolaScope.closeAll();
   }
 }
+
 
 // ─── Signal merging helper ──────────────────────────────────────────────────
 

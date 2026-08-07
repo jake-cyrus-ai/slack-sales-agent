@@ -99,6 +99,131 @@ const getGoogleCredentials = () => {
   return { clientId, clientSecret };
 };
 
+const getAgentEmailRedirectUri = () =>
+  process.env.GOOGLE_OAUTH_REDIRECT_URI ||
+  `${process.env.FRONTEND_URL || "http://localhost:3000"}/email/callback`;
+
+async function completeUserGoogleOAuth(code: string, state: string, log: Logger) {
+  const supabase = getSupabaseAdmin();
+  const { data: storedState, error: stateError } = await supabase
+    .from("oauth_states")
+    .select("*")
+    .eq("state", state)
+    .eq("status", "pending")
+    .single();
+
+  if (stateError || !storedState || new Date(storedState.expires_at) < new Date()) {
+    throw new Error("Invalid or expired OAuth state");
+  }
+
+  const userId = storedState.user_id as string | null;
+  const organizationId = storedState.metadata?.organization_id as string | undefined;
+  if (!userId || !organizationId || storedState.metadata?.type !== "agent_email") {
+    throw new Error("OAuth state is missing its user or organization owner");
+  }
+
+  const { clientId, clientSecret } = getGoogleCredentials();
+  if (!clientId || !clientSecret) throw new Error("Google OAuth is not configured");
+
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: getAgentEmailRedirectUri(),
+    }),
+  });
+  if (!tokenResponse.ok) {
+    log.error(await extractOAuthErrorFields(tokenResponse), "Google token exchange failed");
+    throw new Error("Failed to exchange Google authorization code");
+  }
+
+  const tokens = await tokenResponse.json() as GoogleTokenResponse;
+  const grantedScopes = (tokens.scope || "").split(" ").filter(Boolean);
+  const missingGroups = REQUIRED_GOOGLE_SCOPE_GROUPS.filter(
+    (group) => !group.some((scope) => grantedScopes.includes(scope)),
+  );
+  if (missingGroups.length) throw new Error("Google did not grant all required Gmail and Calendar scopes");
+
+  const userInfoResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  });
+  if (!userInfoResponse.ok) throw new Error("Failed to read the connected Google account");
+  const userInfo = await userInfoResponse.json() as { email?: string };
+  if (!userInfo.email) throw new Error("Google account did not return an email address");
+
+  const [{ data: encryptedAccess, error: accessError }, { data: encryptedRefresh, error: refreshError }] =
+    await Promise.all([
+      supabase.rpc("encrypt_token", { token: tokens.access_token }),
+      supabase.rpc("encrypt_token", { token: tokens.refresh_token }),
+    ]);
+  if (accessError || refreshError || !encryptedAccess || !encryptedRefresh) {
+    throw new Error("Failed to encrypt Google credentials");
+  }
+
+  await supabase
+    .from("calendar_credentials")
+    .delete()
+    .eq("user_id", userId)
+    .eq("organization_id", organizationId);
+
+  const { error: calendarError } = await supabase.from("calendar_credentials").insert({
+    user_id: userId,
+    organization_id: organizationId,
+    access_token_encrypted: encryptedAccess,
+    refresh_token_encrypted: encryptedRefresh,
+    token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    calendar_email: userInfo.email,
+    connected_at: new Date().toISOString(),
+    sync_status: "active",
+    scopes: grantedScopes,
+  });
+  if (calendarError) throw new Error(`Failed to save Google credentials: ${calendarError.message}`);
+
+  // Keep the organization sender compatible with autonomous-email workflows,
+  // while calendar_credentials remains the source of truth for user skills.
+  const { error: senderError } = await supabase.from("agent_email_credentials").upsert({
+    organization_id: organizationId,
+    email_address: userInfo.email,
+    display_name: "Sales Agent",
+    refresh_token: encryptedRefresh,
+    access_token: null,
+    token_expires_at: null,
+    provider: "google",
+    is_active: true,
+    last_verified_at: new Date().toISOString(),
+    verification_status: "verified",
+    created_by: userId,
+  }, { onConflict: "organization_id" });
+  if (senderError) log.warn({ err: senderError }, "Google connected, but autonomous sender compatibility record failed");
+
+  await supabase.from("oauth_states").update({ status: "completed" }).eq("id", storedState.id);
+  log.info({ userId, organizationId, email: userInfo.email }, "Connected user Google workspace");
+  return { userId, organizationId, email: userInfo.email };
+}
+
+export async function googleBrowserOAuthCallback(req: Request, res: Response) {
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const code = typeof req.query.code === "string" ? req.query.code : null;
+  const state = typeof req.query.state === "string" ? req.query.state : null;
+  if (!code || !state) {
+    return res.redirect(`${frontendUrl}/?oauth_error=missing_google_callback_parameters`);
+  }
+
+  try {
+    await completeUserGoogleOAuth(code, state, req.log);
+    return res.redirect(`${frontendUrl}/?oauth_success=true&provider=google`);
+  } catch (error) {
+    req.log.error({ err: error }, "Google browser OAuth callback failed");
+    const supabase = getSupabaseAdmin();
+    await supabase.from("oauth_states").update({ status: "failed" }).eq("state", state);
+    return res.redirect(`${frontendUrl}/?oauth_error=google_connection_failed`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Slack OAuth credentials
 // ---------------------------------------------------------------------------
@@ -1719,8 +1844,7 @@ router.post(
       }
 
       // Build Google auth URL
-      const appUrl = process.env.FRONTEND_URL || "https://your-app.example.com";
-      const redirectUri = `${appUrl}/oauth/agent-email/callback`;
+      const redirectUri = getAgentEmailRedirectUri();
       const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
       authUrl.searchParams.set("client_id", clientId);
       authUrl.searchParams.set("redirect_uri", redirectUri);
@@ -1981,8 +2105,7 @@ router.post(
 
       // Exchange code for tokens
       const { clientId, clientSecret } = getGoogleCredentials();
-      const appUrl = process.env.FRONTEND_URL || "https://your-app.example.com";
-      const redirectUri = `${appUrl}/oauth/agent-email/callback`;
+      const redirectUri = getAgentEmailRedirectUri();
 
       const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",

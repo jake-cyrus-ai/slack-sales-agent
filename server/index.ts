@@ -19,8 +19,6 @@ import type { Request } from "./types";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import pinoHttp from "pino-http";
 import { workflow } from "../server/workflows/client";
 import {
@@ -30,18 +28,20 @@ import {
   validateSlackPayload,
 } from "./webhookVerification";
 import { supabaseAuthMiddleware } from "./lib/auth";
+import { configurationRedirectPath } from "./lib/configuration-redirect";
 import { logger } from "./lib/logger";
 import styleExamplesRouter from "./routes/style-examples";
 import userRouter from "./routes/user";
 import salesforceRouter from "./routes/salesforce";
 import attioRouter from "./routes/attio";
-import oauthRouter from "./routes/oauth";
+import oauthRouter, { googleBrowserOAuthCallback } from "./routes/oauth";
 import knowledgeBaseRouter from "./routes/knowledge-base";
 import calendarRouter from "./routes/calendar";
 import automationRouter from "./routes/automation";
 import featureFlagsRouter from "./routes/feature-flags";
 import onboardingRouter from "./routes/onboarding";
 import feedbackRouter from "./routes/feedback";
+import relationshipsRouter from "./routes/relationships";
 import { supabase } from './src/lib/supabase';
 import './src/config';
 
@@ -173,6 +173,9 @@ const webhookLimiter = rateLimit({
   message: { error: 'Too many requests from this IP, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  // Vercel also sends the standardized Forwarded header. Express resolves
+  // req.ip from X-Forwarded-For using the single trusted proxy hop above.
+  validate: { forwardedHeader: false },
   handler: (req: Request, res: Response) => {
     req.log.warn({ ip: req.ip }, "Webhook rate limit exceeded");
     res.status(429).json({
@@ -189,6 +192,7 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { forwardedHeader: false },
 });
 
 // Deep health check rate limiter - stricter to prevent abuse
@@ -199,6 +203,7 @@ const deepHealthLimiter = rateLimit({
   message: { error: 'Too many health check requests' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { forwardedHeader: false },
   handler: (req: Request, res: Response) => {
     req.log.warn({ ip: req.ip }, "Deep health check rate limit exceeded");
     res.status(429).json({
@@ -359,6 +364,10 @@ app.post(
       const eventPayload = {
         ...eventData,
         team_id: req.body.team_id || req.body.team?.id || eventData.team_id,
+        // api_app_id identifies which installed Slack app received the event.
+        // Preserve it across the durable boundary so multi-app workspace
+        // resolution does not depend on a deployer's optional environment var.
+        slack_app_id: req.body.api_app_id || eventData.api_app_id,
       };
 
       // Skip non-user events before they reach Vercel Workflow. These are system/
@@ -541,6 +550,7 @@ app.use("/api", automationRouter);
 app.use("/api", featureFlagsRouter);
 app.use("/api", onboardingRouter);
 app.use("/api", feedbackRouter);
+app.use("/api", relationshipsRouter);
 
 app.get("/api/cron/:workflowId", async (req: Request, res: Response) => {
   const cronSecret = process.env.CRON_SECRET;
@@ -697,14 +707,28 @@ if (process.env.NODE_ENV !== 'production') {
   );
 }
 
+// OAuth callbacks from the original frontend still target these paths. The
+// public UI is now a single configuration screen at `/`, so canonicalize old
+// routes while preserving provider result parameters.
+app.get("/email/callback", googleBrowserOAuthCallback);
+app.get(["/profile", "/onboarding"], (req: Request, res: Response) => {
+  res.redirect(302, configurationRedirectPath(req.query));
+});
+
 // Serve the small onboarding/configuration UI from the same deployable service.
 // API and webhook routes above always win; unknown API paths still return JSON.
 if (process.env.NODE_ENV === "production") {
-  const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-  const frontendDir = path.join(rootDir, "dist");
-  app.use(express.static(frontendDir, { index: false, maxAge: "1h" }));
+  // Vercel serves Vite's output as static assets before invoking this function.
+  // Missing icon requests can still reach Express; answer them explicitly rather
+  // than trying to read a build-time /dist path that does not exist at runtime.
+  app.get(["/favicon.ico", "/favicon.png"], (_req, res) => {
+    res.status(204).end();
+  });
+
+  // Client-side routes should converge on the canonical configuration screen.
+  // API and health routes are intentionally excluded and retain JSON 404s.
   app.get(/^\/(?!api(?:\/|$)|health(?:\/|$)).*/, (_req, res) => {
-    res.sendFile(path.join(frontendDir, "index.html"));
+    res.redirect(302, "/");
   });
 }
 

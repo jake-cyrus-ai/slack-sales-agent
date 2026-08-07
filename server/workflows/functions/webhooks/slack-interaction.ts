@@ -253,6 +253,7 @@ export const handleSlackInteraction = workflow.createFunction(
     const channelId = payload.channel?.id;
     const messageTs = payload.message?.ts;
     const teamId = payload.team?.id;
+    const slackAppId = payload.api_app_id;
 
     // Slack also fires block_actions for URL buttons (which carry no action_id)
     // and for any interactive component this app doesn't own. Bail before doing
@@ -269,7 +270,7 @@ export const handleSlackInteraction = workflow.createFunction(
     // Step 1: Get workspace + decrypted bot token
     const workspaceResult = await step.run("get-workspace-and-token", async () => {
             const { getWorkspaceWithToken } = await import("../../utils/slack-helpers");
-      return getWorkspaceWithToken(teamId);
+      return getWorkspaceWithToken(teamId, slackAppId);
     });
 
     if (!workspaceResult) {

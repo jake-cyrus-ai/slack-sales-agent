@@ -21,11 +21,11 @@ import {
   startWorkflowRun,
   logWorkflowStep,
   completeWorkflowRun,
-} from "../../../src/lib/workflow-tracking.js";
+} from "../../../src/lib/workflow-tracking";
 import { runSupervisor } from "../../../src/agent/supervisor";
 import Anthropic from "@anthropic-ai/sdk";
-import { config } from "../../../src/config.js";
-import { getGoogleTokens, googleApiFetch } from "../../../src/services/token-manager.js";
+import { config } from "../../../src/config";
+import { getGoogleTokens, googleApiFetch } from "../../../src/services/token-manager";
 import { localDateTimeToUTC } from "../../utils/timezone-helpers";
 
 const log = logger.child({ fn: "meeting-followup" });

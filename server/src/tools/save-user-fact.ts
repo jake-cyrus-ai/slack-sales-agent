@@ -42,7 +42,7 @@ export function createSaveUserFactTool(userId: string, organizationId: string | 
           { userId, organizationId },
           fact,
           1, // top 1 match
-          { category: 'fact' },
+          { category: 'relationship_fact' },
         );
 
         const topMatch = searchResult.results[0];
@@ -154,7 +154,7 @@ async function updateExistingFact(
       .from('user_memories')
       .delete()
       .eq('user_id', userId)
-      .eq('category', 'fact')
+      .eq('category', 'relationship_fact')
       .ilike('content', `%${existingFact}%`),
   )
     .then(() => {
@@ -162,7 +162,7 @@ async function updateExistingFact(
       return getMemoryService().save(
         { userId, organizationId },
         [{ role: 'fact', content: newFact }],
-        { category: 'fact', metadata: { source: 'api', category: 'fact' } },
+        { category: newCategory === 'preference' ? 'preference' : 'relationship_fact', metadata: { source: 'api', category: newCategory === 'preference' ? 'preference' : 'relationship_fact' } },
       );
     })
     .then(() => log.info({ newFact: newFact.slice(0, 80) }, 'Created new memory mirror'))
@@ -202,7 +202,7 @@ async function insertNewFact(
   getMemoryService().save(
     { userId, organizationId },
     [{ role: 'fact', content: fact }],
-    { category: 'fact', metadata: { source: 'api', category: 'fact' } },
+    { category: category === 'preference' ? 'preference' : 'relationship_fact', metadata: { source: 'api', category: category === 'preference' ? 'preference' : 'relationship_fact' } },
   ).catch((err) => log.error({ err }, 'Memory mirror failed'));
 
   return JSON.stringify({

@@ -54,12 +54,13 @@ export function createCalendarSearchTool(userId: string) {
       dateFrom: z.string().optional().describe('Start date in ISO 8601 with timezone offset (e.g. "2026-03-18T00:00:00-05:00"). Use the user\'s timezone, not UTC.'),
       dateTo: z.string().optional().describe('End date in ISO 8601 with timezone offset. Use the user\'s timezone, not UTC.'),
       salesOnly: z.boolean().optional().default(false).describe('When true, exclude investor/VC and hiring meetings from results.'),
+      fresh: z.boolean().optional().default(false).describe('When true, bypass cached database rows and query Google Calendar directly. Required for date-sensitive questions such as today or tomorrow.'),
     }),
-    func: withToolErrorHandling('calendar_search', async ({ query, dateFrom, dateTo, salesOnly }) => {
-      log.info({ query, dateFrom, dateTo, salesOnly }, 'Searching calendar');
+    func: withToolErrorHandling('calendar_search', async ({ query, dateFrom, dateTo, salesOnly, fresh }) => {
+      log.info({ query, dateFrom, dateTo, salesOnly, fresh }, 'Searching calendar');
 
       // Try database first (calendar_events table)
-      try {
+      if (!fresh) try {
         let dbQuery = supabase
           .from('calendar_events')
           .select('google_event_id, summary, description, start_time, end_time, attendees, location, meeting_link')

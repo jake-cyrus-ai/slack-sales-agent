@@ -67,10 +67,10 @@ import {
   checkCooldownPeriod,
 } from "../../utils/feature-flags";
 // Sub-agent imports
-import { createProspectingAgent } from "../../../src/agent/sub-agents/prospecting.js";
-import { createEnablementAgent } from "../../../src/agent/sub-agents/enablement.js";
-import { runAttioAgent, hasAttioConnection } from "../../../src/attio/index.js";
-import { buildPromptContext, type UserInfo } from "../../../src/agent/system-prompt.js";
+import { createProspectingAgent } from "../../../src/agent/sub-agents/prospecting";
+import { createEnablementAgent } from "../../../src/agent/sub-agents/enablement";
+import { runAttioAgent, hasAttioConnection } from "../../../src/attio/index";
+import { buildPromptContext, type UserInfo } from "../../../src/agent/system-prompt";
 import { HumanMessage } from "@langchain/core/messages";
 import { executePostSendActions, type PostSendParams } from "../../utils/post-send-actions";
 import {

@@ -631,6 +631,7 @@ export const handleSlackMessage = workflow.createFunction(
 
     // Extract key data
     const teamId = messageData.team_id || (typeof messageData.team === "string" ? messageData.team : messageData.team?.id);
+    const slackAppId = messageData.slack_app_id || messageData.api_app_id;
     const userId = messageData.user;
     const channelId = messageData.channel;
     const text = messageData.text || "";
@@ -671,7 +672,7 @@ export const handleSlackMessage = workflow.createFunction(
       const supabase = getSupabaseAdmin();
 
       // 1a+b. Get workspace + decrypted bot token (cached, 10-min TTL)
-      const workspace = await getWorkspaceWithToken(teamId);
+      const workspace = await getWorkspaceWithToken(teamId, slackAppId);
       if (!workspace) return null;
 
       const { botToken } = workspace;

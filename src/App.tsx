@@ -24,11 +24,24 @@ function SignIn({ supabase }: { supabase: SupabaseClient }) {
     if (result.error) setMessage(result.error.message);
     else if (mode === "signup" && !result.data.session) setMessage("Check your email to confirm your account.");
   };
+  const signInWithGoogle = async () => {
+    setMessage("Opening Google…");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin,
+        scopes: "openid email profile",
+      },
+    });
+    if (error) setMessage(error.message);
+  };
   return <main><section className="hero">
     <span className="eyebrow">Open-source · Slack native</span>
     <h1>Slack-native sales agent</h1>
     <p>Sign in to install Slack and connect your business systems.</p>
     <div className="card">
+      <button className="primary" onClick={() => void signInWithGoogle()}>Continue with Google</button>
+      <span>or use email and password</span>
       <input aria-label="Email" type="email" placeholder="you@company.com" value={email} onChange={(event) => setEmail(event.target.value)} />
       <input aria-label="Password" type="password" placeholder="Password" value={password} onChange={(event) => setPassword(event.target.value)} />
       <button className="primary" onClick={() => void submit()}>{mode === "signin" ? "Sign in" : "Create account"}</button>
@@ -86,18 +99,18 @@ function Configuration({ supabase, session }: { supabase: SupabaseClient; sessio
   useEffect(() => { void loadOrganizations(); }, [loadOrganizations]);
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
-    if (window.location.pathname !== "/email/callback") return;
     const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const state = params.get("state");
-    if (!code || !state) return;
-    setBusy("google");
-    request("/oauth/agent-email/callback", { method: "POST", body: JSON.stringify({ code, state }) })
-      .then(() => { window.history.replaceState({}, "", "/"); return refresh(); })
-      .then(() => setMessage("Google connected."))
-      .catch((error) => setMessage(error instanceof Error ? error.message : "Google connection failed."))
-      .finally(() => setBusy(null));
-  }, [request, refresh]);
+    const provider = params.get("provider");
+    const granolaConnected = params.get("granola_success") === "true";
+    const attioConnected = params.get("attio_connected") === "true";
+    if (params.get("oauth_success") === "true" || granolaConnected || attioConnected) {
+      const integration = granolaConnected ? "Granola" : attioConnected ? "Attio" : provider === "slack_bot" ? "Slack" : provider || "Integration";
+      setMessage(`${integration} connected.`);
+      void refresh();
+    }
+    const error = params.get("oauth_error") || params.get("granola_error") || params.get("attio_error") || params.get("error");
+    if (error) setMessage(`Connection failed: ${error.replaceAll("_", " ")}.`);
+  }, [refresh]);
 
   const createOrganization = async () => {
     setBusy("organization");

@@ -12,9 +12,15 @@ export interface MemoryScope {
   skillNamespace?: string;
 }
 
+export type MemoryCategory =
+  | 'preference'
+  | 'relationship_fact'
+  | 'correction'
+  | 'historical_artifact';
+
 export interface MemoryMetadata {
   source?: 'slack' | 'web' | 'api';
-  category?: 'conversation' | 'fact' | 'preference' | 'org_shared';
+  category?: MemoryCategory;
   channelId?: string;
   threadTs?: string;
   conversationId?: string;
@@ -24,11 +30,11 @@ export interface MemoryMetadata {
 
 export interface MemorySaveOptions {
   metadata?: MemoryMetadata;
-  category?: string;
+  category?: MemoryCategory;
 }
 
 export interface MemorySearchOptions {
-  category?: string;
+  category?: MemoryCategory;
   /** Also search the org_shared namespace for team-wide memories. */
   includeOrgShared?: boolean;
 }
@@ -38,7 +44,7 @@ export interface MemoryEntry {
   score?: number;
   createdAt?: string;
   metadata?: MemoryMetadata;
-  category?: string;
+  category?: MemoryCategory;
 }
 
 export interface MemorySearchResult {

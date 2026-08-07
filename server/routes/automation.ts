@@ -320,13 +320,28 @@ router.get(
       // uniform error handling across all 5 integrations.
       const checkGoogle = async (): Promise<boolean> => {
         try {
-          const { data } = await supabase
+          // The configuration UI connects the organization-level Gmail sender
+          // through agent_email_credentials. Retain the legacy user-level
+          // calendar check so either supported Google connection is visible.
+          const calendarQuery = supabase
             .from("calendar_credentials")
             .select("id")
             .eq("user_id", userId)
             .eq("sync_status", "active")
             .maybeSingle();
-          return !!data;
+
+          const emailQuery = credentialOrgId
+            ? supabase
+                .from("agent_email_credentials")
+                .select("id")
+                .eq("organization_id", credentialOrgId)
+                .eq("is_active", true)
+                .eq("verification_status", "verified")
+                .maybeSingle()
+            : Promise.resolve({ data: null, error: null });
+
+          const [calendar, email] = await Promise.all([calendarQuery, emailQuery]);
+          return !!calendar.data || !!email.data;
         } catch {
           return false;
         }

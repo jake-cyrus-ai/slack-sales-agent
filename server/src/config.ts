@@ -50,8 +50,11 @@ export const config = {
   supabaseServiceRoleKey: requiredAny('SUPABASE_SERVICE_ROLE_KEY', 'SERVICE_ROLE_KEY'),
 
   // LLM
-  anthropicApiKey: required('ANTHROPIC_API_KEY'),
-  openaiApiKey: required('OPENAI_API_KEY'),
+  // Optional at boot so onboarding and integration setup can run locally
+  // before model credentials are configured. Model-backed operations fail
+  // closed at their call sites when the corresponding key is absent.
+  anthropicApiKey: optional('ANTHROPIC_API_KEY'),
+  openaiApiKey: optional('OPENAI_API_KEY'),
 
   // Google OAuth (optional for local dev without Gmail/Calendar features)
   googleClientId: optional('GOOGLE_CALENDAR_CLIENT_ID', optional('GOOGLE_CLIENT_ID')),

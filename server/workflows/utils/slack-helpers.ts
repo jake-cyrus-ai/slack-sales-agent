@@ -38,9 +38,9 @@ export function __resetWorkspaceCacheForTests(): void {
 
 // ─── Workspace lookup ────────────────────────────────────────────────────────
 
-export async function getWorkspaceByTeamId(teamId: string) {
+export async function getWorkspaceByTeamId(teamId: string, eventSlackAppId?: string) {
   const supabase = getSupabaseAdmin();
-  const slackAppId = process.env.SLACK_APP_ID;
+  const slackAppId = eventSlackAppId || process.env.SLACK_APP_ID;
 
   let query = supabase
     .from("slack_workspaces")
@@ -50,8 +50,6 @@ export async function getWorkspaceByTeamId(teamId: string) {
 
   if (slackAppId) {
     query = query.eq("slack_app_id", slackAppId);
-  } else {
-    query = query.is("slack_app_id", null);
   }
 
   const { data, error } = await query.maybeSingle();
@@ -114,8 +112,9 @@ export async function decryptBotToken(encryptedToken: string): Promise<string> {
  */
 export async function getWorkspaceWithToken(
   teamId: string,
+  eventSlackAppId?: string,
 ): Promise<{ id: string; botToken: string } | null> {
-  const slackAppId = process.env.SLACK_APP_ID || "legacy";
+  const slackAppId = eventSlackAppId || process.env.SLACK_APP_ID || "legacy";
   const cacheKey = `${teamId}:${slackAppId}`;
   const now = Date.now();
 
@@ -124,7 +123,7 @@ export async function getWorkspaceWithToken(
     return cached.value;
   }
 
-  const workspace = await getWorkspaceByTeamId(teamId);
+  const workspace = await getWorkspaceByTeamId(teamId, eventSlackAppId);
   if (!workspace) return null;
 
   const botToken = await decryptBotToken(workspace.bot_token);

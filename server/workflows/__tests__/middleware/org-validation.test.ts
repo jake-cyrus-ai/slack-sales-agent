@@ -34,7 +34,7 @@ vi.mock("../../utils/supabase", () => ({
  * use pairs that have been seen before and assert the cached outcome.
  */
 async function runValidation(eventData: Record<string, unknown>): Promise<void> {
-  const { validateWorkflowEvent } = await import("../../middleware/org-validation.js");
+  const { validateWorkflowEvent } = await import("../../middleware/org-validation");
   await validateWorkflowEvent({ name: "test/event", data: eventData });
 }
 

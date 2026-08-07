@@ -51,7 +51,7 @@ export function createSaveSalesforceRuleTool(userId: string, organizationId: str
         await memoryService.save(
           scope,
           [{ role: 'user', content }],
-          { category: 'org_shared' },
+          { category: 'preference' },
         );
 
         log.info({ content }, 'Saved rule');

@@ -9,7 +9,7 @@ import { logger } from "../../lib/logger";
 import { workflow } from "../client";
 import { getSupabaseAdmin } from "../utils";
 import { generateClaudeMessage, parseJSONResponse } from "../utils/llm/clients";
-import { browseAndExtract, browseMultiple } from "../../src/lib/browserbase.js";
+import { browseAndExtract, browseMultiple } from "../../src/lib/browserbase";
 
 const log = logger.child({ fn: "research-org-context" });
 

@@ -14,7 +14,7 @@
 
 import { workflow } from "../../client";
 import { getSupabaseAdmin } from "../../utils";
-import { getGoogleTokens, googleApiFetch } from "../../../src/services/token-manager.js";
+import { getGoogleTokens, googleApiFetch } from "../../../src/services/token-manager";
 import { logger } from "../../../lib/logger";
 
 const log = logger.child({ fn: "scan-upcoming-meetings" });
@@ -153,10 +153,44 @@ export const scanUpcomingMeetings = workflow.createFunction(
       return { processed: 0, message: "All meetings already prepped" };
     }
 
-    // Step 4: Fan out meeting-prep events for unprepped meetings only
+    // Step 4: Atomically claim each delivery before fan-out. The cache is only
+    // written after generation, so it cannot protect against overlapping cron
+    // runs or a slow prep workflow. The database uniqueness constraint on
+    // idempotency_keys makes this claim durable across deployments and retries.
+    const claimedMeetings = await step.run("claim-meeting-prep-deliveries", async () => {
+      const supabase = getSupabaseAdmin();
+      const claimed: typeof newMeetings = [];
+
+      for (const meeting of newMeetings) {
+        const key = `meeting-prep:${meeting.userId}:${meeting.calendarEventId}`;
+        const { error } = await supabase.from("idempotency_keys").insert({
+          organization_id: meeting.organizationId,
+          key,
+          operation: "meeting_prep_delivery",
+          status: "started",
+          expires_at: new Date(new Date(meeting.startTime).getTime() + 24 * 60 * 60 * 1000).toISOString(),
+        });
+
+        if (!error) {
+          claimed.push(meeting);
+        } else if (error.code !== "23505") {
+          // Fail closed: a database error must never turn into duplicate Slack DMs.
+          log.error({ err: error, userId: meeting.userId, eventId: meeting.calendarEventId }, "Failed to claim meeting prep delivery");
+        }
+      }
+
+      return claimed;
+    });
+
+    if (claimedMeetings.length === 0) {
+      log.info({ count: newMeetings.length }, "Meeting prep deliveries already claimed, skipping");
+      return { processed: 0, message: "Meeting prep deliveries already claimed" };
+    }
+
+    // Step 5: Fan out only atomically claimed meeting-prep events.
     await step.sendEvent(
       "fan-out-meeting-prep",
-      newMeetings.map((meeting) => ({
+      claimedMeetings.map((meeting) => ({
         name: "calendar/meeting-prep" as const,
         id: `meeting-prep-${meeting.userId}-${meeting.calendarEventId}`,
         data: {
@@ -169,10 +203,10 @@ export const scanUpcomingMeetings = workflow.createFunction(
       }))
     );
 
-    log.info({ queued: newMeetings.length, alreadyPrepped: allMeetings.length - newMeetings.length }, "Queued meeting prep jobs");
+    log.info({ queued: claimedMeetings.length, alreadyPrepped: allMeetings.length - newMeetings.length }, "Queued meeting prep jobs");
 
     return {
-      processed: allMeetings.length,
+      processed: claimedMeetings.length,
     };
   }
 );

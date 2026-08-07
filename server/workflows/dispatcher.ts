@@ -1,5 +1,5 @@
-import type { WorkflowEvent } from "./client.js";
-import { executeEventStep, executeScheduledStep } from "./execution-step.js";
+import type { WorkflowEvent } from "./client";
+import { executeEventStep, executeScheduledStep } from "./execution-step";
 
 export async function dispatchWorkflowEvent(event: WorkflowEvent) {
   "use workflow";

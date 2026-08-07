@@ -11,7 +11,7 @@ import { registerActions, ActionContext, ActionResult } from "../../utils/action
 import { getSupabaseAdmin } from "../../utils/supabase";
 import { trackUsageEvent } from "../../../src/lib/usage-tracking";
 import { getGoogleTokens } from "../../utils/google/auth-helper";
-import { googleApiFetch } from "../../../src/services/token-manager.js";
+import { googleApiFetch } from "../../../src/services/token-manager";
 import { logger } from "../../../lib/logger";
 
 const log = logger.child({ fn: "calendar-actions" });

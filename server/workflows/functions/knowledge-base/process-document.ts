@@ -7,7 +7,6 @@
 
 import { workflow } from "../../client";
 import { getSupabaseAdmin } from "../../utils/supabase";
-import { PDFParse } from "pdf-parse";
 import { logger } from "../../../lib/logger";
 import { getOpenAIClient } from "../../utils/llm/clients";
 
@@ -94,6 +93,10 @@ export async function extractText(base64Data: string, filename: string): Promise
   const buffer = Buffer.from(base64Data, "base64");
 
   if (lowerFilename.endsWith('.pdf')) {
+    // pdf-parse initializes pdfjs (and its browser-like globals) at module load.
+    // Loading it lazily keeps that dependency out of unrelated Vercel Workflow
+    // handlers, which all share this function registry bundle.
+    const { PDFParse } = await import("pdf-parse");
     const parser = new PDFParse({ data: buffer, verbosity: 0 });
     const result = await parser.getText();
     await parser.destroy();

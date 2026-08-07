@@ -26,9 +26,9 @@ import {
   sendSlackBlockMessage,
 } from "../../utils/slack-helpers";
 import { generateClaudeMessage } from "../../utils/llm/clients";
-import { trackUsageEvent } from "../../../src/lib/usage-tracking.js";
-import { getGoogleTokens, googleApiFetch } from "../../../src/services/token-manager.js";
-import { isSalesforceConfigured, getSalesforceConnection } from "../../../src/salesforce/client.js";
+import { trackUsageEvent } from "../../../src/lib/usage-tracking";
+import { getGoogleTokens, googleApiFetch } from "../../../src/services/token-manager";
+import { isSalesforceConfigured, getSalesforceConnection } from "../../../src/salesforce/client";
 import {
   getLocalDate,
   getLocalMidnight,

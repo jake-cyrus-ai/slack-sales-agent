@@ -18,8 +18,8 @@ import {
   type ThreadContext,
   type ConversationStage,
 } from "./email-thread-context";
-import { runAttioAgent, hasAttioConnection } from "../../src/attio/index.js";
-import type { UserInfo } from "../../src/agent/system-prompt.js";
+import { runAttioAgent, hasAttioConnection } from "../../src/attio/index";
+import type { UserInfo } from "../../src/agent/system-prompt";
 import type { FitScoreResult } from "./fit-score-dossier";
 
 const log = logger.child({ util: "post-send-actions" });

@@ -20,9 +20,9 @@ export function createMemorySearchTool(memoryService: IMemoryService, scope: Mem
     schema: z.object({
       query: z.string().describe('What to search for in past conversation memory'),
       category: z
-        .enum(['conversation', 'fact', 'preference', 'org_shared'])
+        .enum(['preference', 'relationship_fact', 'correction', 'historical_artifact'])
         .optional()
-        .describe('Optional: filter by memory type. "fact" = explicit user facts, "org_shared" = team-wide knowledge, "conversation" = past chat turns'),
+        .describe('Optional memory category. Use historical_artifact only when the user explicitly asks about a past conversation or output.'),
     }),
     func: async ({ query, category }) => {
       log.info({ query, category: category ?? 'all' }, 'Searching memory');

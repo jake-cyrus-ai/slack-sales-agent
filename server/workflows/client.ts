@@ -1,5 +1,5 @@
 import { start } from "workflow/api";
-import { logger } from "../lib/logger.js";
+import { logger } from "../lib/logger";
 
 export type WorkflowEvent<T = Record<string, unknown>> = {
   id?: string;
@@ -24,8 +24,11 @@ const durationToMs = (value: string): number => {
 };
 
 class AwaitingExternalApproval extends Error {
-  constructor(readonly eventName: string) {
+  readonly eventName: string;
+
+  constructor(eventName: string) {
     super(`Awaiting external approval: ${eventName}`);
+    this.eventName = eventName;
   }
 }
 
@@ -64,7 +67,7 @@ export const executeDefinition = async (
   definition: WorkflowDefinition,
   event: WorkflowEvent,
 ) => {
-  const { validateWorkflowEvent } = await import("./middleware/org-validation.js");
+  const { validateWorkflowEvent } = await import("./middleware/org-validation");
   await validateWorkflowEvent(event);
   try {
     return await definition.handler({
@@ -88,14 +91,14 @@ const eventNames = (trigger: WorkflowDefinition["trigger"]): string[] => {
 };
 
 export async function executeEvent(event: WorkflowEvent) {
-  const { functions } = await import("./functions/index.js");
+  const { functions } = await import("./functions/index");
   const matches = functions.filter((definition) => eventNames(definition.trigger).includes(event.name));
   if (!matches.length) throw new Error(`No workflow registered for event ${event.name}`);
   return Promise.all(matches.map((definition) => executeDefinition(definition, event)));
 }
 
 export async function executeScheduled(workflowId: string) {
-  const { functions } = await import("./functions/index.js");
+  const { functions } = await import("./functions/index");
   const definition = functions.find((candidate) => {
     if (candidate.id !== workflowId) return false;
     const triggers = Array.isArray(candidate.trigger) ? candidate.trigger : [candidate.trigger];
@@ -121,7 +124,7 @@ export const workflow = {
   async send(eventOrEvents: WorkflowEvent | WorkflowEvent[]) {
     const events = Array.isArray(eventOrEvents) ? eventOrEvents : [eventOrEvents];
     const ids: string[] = [];
-    const { dispatchWorkflowEvent } = await import("./dispatcher.js");
+    const { dispatchWorkflowEvent } = await import("./dispatcher");
     for (const event of events) {
       if (event.name === "email/approval-response") {
         ids.push(`approval:${event.name}`);
@@ -134,7 +137,7 @@ export const workflow = {
   },
 
   async startScheduled(workflowId: string) {
-    const { dispatchScheduledWorkflow } = await import("./dispatcher.js");
+    const { dispatchScheduledWorkflow } = await import("./dispatcher");
     const run = await start(dispatchScheduledWorkflow, [workflowId]);
     return { runId: run.runId };
   },

@@ -6,7 +6,7 @@
   "license": "MIT",
   "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "repository": {
     "type": "git",
@@ -105,7 +105,8 @@
   },
   "pnpm": {
     "overrides": {
-      "undici": ">=7.29.0"
+      "@workflow/world-local>undici": "7.29.0",
+      "@workflow/world-vercel>undici": "7.29.0"
     }
   }
 }
