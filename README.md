@@ -6,7 +6,7 @@ A Slack-native, open-source sales agent platform that connects to email, calenda
 
 - Slack installation, signed Events API ingestion, DMs, mentions, threads, and interactive approvals
 - durable Vercel workflow dispatch with retries, delayed work, persisted human approvals, and failure reporting
-- a LangGraph supervisor that composes sales skills
+- a LangGraph supervisor that routes and composes sales skills inside durable Vercel Workflow runs
 - Gmail and Google Calendar OAuth, search, drafting, sending, and meeting preparation
 - direct Attio and Granola hosted-MCP connections using OAuth discovery and PKCE
 - Salesforce accounts, contacts, opportunities, tasks, notes, and approval-gated writes
@@ -19,6 +19,41 @@ Slack → verified event → tenant resolution → Vercel Workflow → superviso
       → sales skills → approval/autonomous policy → provider action
       → audit, feedback, and preference learning
 ```
+
+Vercel Workflow and LangGraph have separate responsibilities. Vercel Workflow owns durable execution, retries, schedules, delayed work, and resumable processes. LangGraph runs inside that durable boundary and decides which sales skills and tools should handle a request.
+
+## Context and memory
+
+The platform separates durable knowledge from historical output:
+
+| Category | Purpose | Proactively injected? |
+| --- | --- | --- |
+| `preference` | Explicit or well-supported user instructions, such as tone and briefing format | Yes, when relevant |
+| `relationship_fact` | Structured knowledge about people, companies, accounts, and working relationships | Yes, when relevant |
+| `correction` | A user correction linked to its feedback event and source | Yes, when relevant |
+| `historical_artifact` | Prior conversations, generated briefs, drafts, and run output | No |
+
+Historical artifacts remain available when a user explicitly asks about a previous conversation or output, but they are never treated as current business state. Date-sensitive calendar questions must query Google Calendar directly. Current email and CRM state should likewise come from the connected provider rather than recalled conversation text.
+
+Sensitive message bodies are not promoted into durable learning by default. Memories retain tenant ownership, source provenance, and category metadata.
+
+## Canonical relationships
+
+People and companies can have canonical, organization-scoped relationship records with lifecycle stages such as `prospect`, `qualified`, `opportunity`, `customer`, `former_customer`, and `partner`.
+
+Consequential changes use an approval proposal rather than silently rewriting context. For example:
+
+```text
+Salesforce opportunity becomes Closed Won
+→ propose Acme: prospect → customer
+→ show evidence and before/after values
+→ authorized owner or admin approves
+→ verify the canonical record has not changed
+→ apply atomically
+→ append immutable history and an audit event
+```
+
+Stale proposals fail with a conflict instead of overwriting newer information. The authenticated relationship API supports creating canonical records and proposing, approving, or rejecting lifecycle changes. Dedicated Slack buttons for relationship proposals are not yet included.
 
 ## Quick start
 
