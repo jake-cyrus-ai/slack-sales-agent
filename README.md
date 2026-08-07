@@ -26,7 +26,7 @@ Requirements: Node.js 22+, pnpm 10+, a Supabase project, Vercel, Slack, Anthropi
 
 ```bash
 git clone https://github.com/jake-cyrus-ai/slack-sales-agent-harness.git
-cd slack-sales-agent
+cd slack-sales-agent-harness
 corepack enable
 pnpm install --frozen-lockfile
 cp .env.example .env
