@@ -25,7 +25,7 @@ Slack → verified event → tenant resolution → Vercel Workflow → superviso
 Requirements: Node.js 22+, pnpm 10+, a Supabase project, Vercel, Slack, Anthropic, and OpenAI. The included high-frequency cron schedules require a Vercel plan that supports them.
 
 ```bash
-git clone https://github.com/jake-cyrus-ai/slack-sales-agent.git
+git clone https://github.com/jake-cyrus-ai/slack-sales-agent-harness.git
 cd slack-sales-agent
 corepack enable
 pnpm install --frozen-lockfile

@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jake-cyrus-ai/slack-sales-agent.git"
+    "url": "https://github.com/jake-cyrus-ai/slack-sales-agent-harness.git"
   },
   "type": "module",
   "scripts": {
